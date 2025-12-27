@@ -20,6 +20,20 @@ interface AdvancedScanResult {
     created_at: string;
 }
 
+interface DastScan {
+    id: number;
+    target: string;
+    score: number;
+    created_at: string;
+}
+
+interface SastScan {
+    id: number;
+    path: string;
+    score: number;
+    created_at: string;
+}
+
 interface Props {
     onBack: () => void;
 }
@@ -47,9 +61,25 @@ export const AdvancedScanView: React.FC<Props> = ({ onBack }) => {
         password: '',
         loginUrl: ''
     });
+    
+    // Enhanced AI Report states
+    const [showEnhancedReport, setShowEnhancedReport] = useState(false);
+    const [generatingReport, setGeneratingReport] = useState(false);
+    const [enhancedReport, setEnhancedReport] = useState<string | null>(null);
+    const [dastScans, setDastScans] = useState<DastScan[]>([]);
+    const [sastScans, setSastScans] = useState<SastScan[]>([]);
+    const [selectedDastId, setSelectedDastId] = useState<number | null>(null);
+    const [selectedSastId, setSelectedSastId] = useState<number | null>(null);
+    const [apiKey, setApiKey] = useState('');
+    const [selectedModel, setSelectedModel] = useState('models/gemini-2.5-flash');
 
     useEffect(() => {
         loadHistory();
+        loadDastScans();
+        loadSastScans();
+        // Load saved API key
+        const savedKey = localStorage.getItem('gemini_api_key');
+        if (savedKey) setApiKey(savedKey);
     }, []);
 
     const loadHistory = async () => {
@@ -61,6 +91,70 @@ export const AdvancedScanView: React.FC<Props> = ({ onBack }) => {
             }
         } catch (e) {
             console.error('Failed to load history');
+        }
+    };
+    
+    const loadDastScans = async () => {
+        try {
+            const response = await fetch('http://localhost:8080/api/v1/history');
+            if (response.ok) {
+                const data = await response.json();
+                setDastScans(data);
+            }
+        } catch (e) {
+            console.error('Failed to load DAST scans');
+        }
+    };
+    
+    const loadSastScans = async () => {
+        try {
+            const response = await fetch('http://localhost:8080/api/v1/scan-local/history');
+            if (response.ok) {
+                const data = await response.json();
+                setSastScans(data);
+            }
+        } catch (e) {
+            console.error('Failed to load SAST scans');
+        }
+    };
+    
+    const handleGenerateEnhancedReport = async () => {
+        if (!result?.id) {
+            setError('Execute um scan avançado primeiro');
+            return;
+        }
+        
+        setGeneratingReport(true);
+        setEnhancedReport(null);
+        setError(null);
+        
+        try {
+            const payload: any = {
+                advanced_scan_id: result.id,
+                model: selectedModel
+            };
+            
+            if (selectedDastId) payload.scan_id = selectedDastId;
+            if (selectedSastId) payload.local_scan_id = selectedSastId;
+            if (apiKey) payload.api_key = apiKey;
+            
+            const response = await fetch('http://localhost:8080/api/v1/ai/enhanced-report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Falha ao gerar relatório');
+            }
+            
+            const data = await response.json();
+            setEnhancedReport(data.content);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setGeneratingReport(false);
         }
     };
 
@@ -313,9 +407,18 @@ export const AdvancedScanView: React.FC<Props> = ({ onBack }) => {
                                 <h3 className="text-lg font-bold text-slate-900">Resultado do Scan</h3>
                                 <p className="text-sm text-slate-500">{result.url}</p>
                             </div>
-                            <span className={`px-4 py-2 rounded-lg font-bold ${getRiskColor(result.summary?.overallRisk || 'LOW')}`}>
-                                {result.summary?.overallRisk || 'LOW'} RISK
-                            </span>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => setShowEnhancedReport(true)}
+                                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition-all flex items-center gap-2"
+                                >
+                                    <i className="fas fa-brain"></i>
+                                    Relatório AI Enhanced
+                                </button>
+                                <span className={`px-4 py-2 rounded-lg font-bold ${getRiskColor(result.summary?.overallRisk || 'LOW')}`}>
+                                    {result.summary?.overallRisk || 'LOW'} RISK
+                                </span>
+                            </div>
                         </div>
                         
                         <div className="grid grid-cols-4 gap-4 mb-4">
@@ -758,6 +861,203 @@ export const AdvancedScanView: React.FC<Props> = ({ onBack }) => {
                         </div>
                     </div>
                 </>
+            )}
+            
+            {/* Enhanced AI Report Modal */}
+            {showEnhancedReport && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-slate-200 bg-gradient-to-r from-purple-600 to-indigo-600">
+                            <div className="flex items-center justify-between">
+                                <div className="text-white">
+                                    <h3 className="text-xl font-bold flex items-center gap-2">
+                                        <i className="fas fa-brain"></i>
+                                        Relatório AI Enhanced
+                                    </h3>
+                                    <p className="text-purple-200 text-sm">Correlação multi-fonte: DAST + Advanced + SAST</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowEnhancedReport(false)}
+                                    className="p-2 hover:bg-white/20 rounded-lg transition-colors text-white"
+                                >
+                                    <i className="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {!enhancedReport ? (
+                                <div className="space-y-6">
+                                    {/* Scan Selection */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* DAST Scan Selection */}
+                                        <div className="p-4 bg-slate-50 rounded-xl">
+                                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                                <i className="fas fa-globe mr-2 text-blue-500"></i>
+                                                Scan DAST (Opcional)
+                                            </label>
+                                            <select
+                                                value={selectedDastId || ''}
+                                                onChange={(e) => setSelectedDastId(e.target.value ? Number(e.target.value) : null)}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                            >
+                                                <option value="">Nenhum</option>
+                                                {dastScans.map(scan => (
+                                                    <option key={scan.id} value={scan.id}>
+                                                        {scan.target} (Score: {scan.score})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-xs text-slate-500 mt-1">Dados de varredura dinâmica</p>
+                                        </div>
+                                        
+                                        {/* SAST Scan Selection */}
+                                        <div className="p-4 bg-slate-50 rounded-xl">
+                                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                                <i className="fas fa-code mr-2 text-green-500"></i>
+                                                Scan SAST (Opcional)
+                                            </label>
+                                            <select
+                                                value={selectedSastId || ''}
+                                                onChange={(e) => setSelectedSastId(e.target.value ? Number(e.target.value) : null)}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                            >
+                                                <option value="">Nenhum</option>
+                                                {sastScans.map(scan => (
+                                                    <option key={scan.id} value={scan.id}>
+                                                        {scan.path} (Score: {scan.score})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-xs text-slate-500 mt-1">Dados de análise de código</p>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Current Advanced Scan Info */}
+                                    <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <i className="fas fa-check-circle text-indigo-600"></i>
+                                            <span className="font-medium text-indigo-700">Scan Avançado Selecionado</span>
+                                        </div>
+                                        <p className="text-sm text-indigo-600">{result?.url}</p>
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            {result?.modules_run?.map(m => (
+                                                <span key={m} className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-xs">
+                                                    {m}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Model Selection */}
+                                    <div className="p-4 bg-slate-50 rounded-xl">
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                                            <i className="fas fa-robot mr-2 text-purple-500"></i>
+                                            Modelo AI
+                                        </label>
+                                        <select
+                                            value={selectedModel}
+                                            onChange={(e) => setSelectedModel(e.target.value)}
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="models/gemini-2.5-flash">Gemini 2.5 Flash (Recomendado)</option>
+                                            <option value="models/gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                                            <option value="models/gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
+                                        </select>
+                                    </div>
+                                    
+                                    {/* API Key (if not saved) */}
+                                    {!apiKey && (
+                                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                            <label className="block text-sm font-medium text-amber-700 mb-2">
+                                                <i className="fas fa-key mr-2"></i>
+                                                API Key Gemini
+                                            </label>
+                                            <input
+                                                type="password"
+                                                value={apiKey}
+                                                onChange={(e) => setApiKey(e.target.value)}
+                                                placeholder="Cole sua API Key aqui"
+                                                className="w-full px-3 py-2 border border-amber-300 rounded-lg bg-white"
+                                            />
+                                        </div>
+                                    )}
+                                    
+                                    {/* Info Box */}
+                                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl">
+                                        <h4 className="font-medium text-purple-700 mb-2">
+                                            <i className="fas fa-info-circle mr-2"></i>
+                                            O que o relatório Enhanced inclui:
+                                        </h4>
+                                        <ul className="text-sm text-purple-600 space-y-1">
+                                            <li>• Correlação de vulnerabilidades entre múltiplas fontes</li>
+                                            <li>• Análise de superfície de ataque completa</li>
+                                            <li>• Impacto no negócio (LGPD, PCI-DSS)</li>
+                                            <li>• Roadmap de remediação priorizado</li>
+                                            <li>• Recomendações estratégicas de longo prazo</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    {error && (
+                                        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-center gap-2">
+                                            <i className="fas fa-exclamation-circle"></i>
+                                            {error}
+                                        </div>
+                                    )}
+                                    
+                                    {/* Generate Button */}
+                                    <button
+                                        onClick={handleGenerateEnhancedReport}
+                                        disabled={generatingReport}
+                                        className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                                    >
+                                        {generatingReport ? (
+                                            <>
+                                                <i className="fas fa-spinner fa-spin"></i>
+                                                Gerando Relatório Correlacionado...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-magic"></i>
+                                                Gerar Relatório Enhanced
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            ) : (
+                                /* Report Display */
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="font-semibold text-slate-900">Relatório Gerado</h4>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(enhancedReport);
+                                                }}
+                                                className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm"
+                                            >
+                                                <i className="fas fa-copy mr-1"></i>
+                                                Copiar
+                                            </button>
+                                            <button
+                                                onClick={() => setEnhancedReport(null)}
+                                                className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors text-sm"
+                                            >
+                                                <i className="fas fa-redo mr-1"></i>
+                                                Novo Relatório
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="prose prose-slate max-w-none p-6 bg-slate-50 rounded-xl border border-slate-200 overflow-auto max-h-[60vh]">
+                                        <div dangerouslySetInnerHTML={{ __html: enhancedReport.replace(/\n/g, '<br/>') }} />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
