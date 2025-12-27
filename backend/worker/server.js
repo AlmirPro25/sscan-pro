@@ -96,10 +96,54 @@ app.post('/scan', async (req, res) => {
             }
         });
 
-        // Navigate with real behavior
-        await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+        // Navigate with real behavior - with fallback for protected sites
+        let navigationSuccess = false;
+        let navigationError = null;
+        
+        // Try 1: networkidle (best for most sites)
+        try {
+            await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 });
+            navigationSuccess = true;
+        } catch (e) {
+            navigationError = e;
+            console.log('⚠️ networkidle timeout, trying domcontentloaded...');
+        }
+        
+        // Try 2: domcontentloaded (faster, works for protected sites)
+        if (!navigationSuccess) {
+            try {
+                await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                navigationSuccess = true;
+                console.log('✅ Loaded with domcontentloaded fallback');
+            } catch (e) {
+                navigationError = e;
+                console.log('⚠️ domcontentloaded timeout, trying load...');
+            }
+        }
+        
+        // Try 3: load (basic, last resort)
+        if (!navigationSuccess) {
+            try {
+                await page.goto(url, { waitUntil: 'load', timeout: 20000 });
+                navigationSuccess = true;
+                console.log('✅ Loaded with load fallback');
+            } catch (e) {
+                navigationError = e;
+            }
+        }
+        
+        // If all attempts failed, throw error with helpful message
+        if (!navigationSuccess) {
+            const errorMessage = navigationError?.message || 'Unknown error';
+            
+            // Check if it's a WAF/anti-bot protection
+            if (errorMessage.includes('Timeout') || errorMessage.includes('timeout')) {
+                throw new Error(`Site protegido por WAF/anti-bot ou muito lento. O site ${url} não respondeu em tempo hábil. Possíveis causas: Cloudflare, Akamai, ou proteção anti-scraping ativa.`);
+            }
+            throw navigationError;
+        }
 
-        // Final scroll to trigger lazy loads
+        // Final scroll to trigger lazy loads (only if navigation succeeded)
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
         await new Promise(r => setTimeout(r, 3000));
 
@@ -1240,9 +1284,38 @@ app.post('/scan', async (req, res) => {
         res.json(response);
         console.log(`✅ Response sent successfully`);
     } catch (err) {
-        console.error("❌ Scan Error:", err);
-        console.error("Stack:", err.stack);
-        res.status(500).json({ error: "Playwright scan failed", details: err.message });
+        console.error("❌ Scan Error:", err.message);
+        
+        // Provide helpful error messages based on error type
+        let userFriendlyError = err.message;
+        let errorType = 'SCAN_ERROR';
+        
+        if (err.message.includes('Timeout') || err.message.includes('timeout')) {
+            errorType = 'TIMEOUT';
+            userFriendlyError = `O site não respondeu em tempo hábil. Possíveis causas:
+• Site protegido por WAF (Cloudflare, Akamai, etc)
+• Proteção anti-bot/anti-scraping ativa
+• Site muito lento ou sobrecarregado
+• URL com muitos parâmetros de tracking
+
+Sugestão: Tente com a URL base do site (sem parâmetros UTM/tracking)`;
+        } else if (err.message.includes('net::ERR_NAME_NOT_RESOLVED')) {
+            errorType = 'DNS_ERROR';
+            userFriendlyError = 'Domínio não encontrado. Verifique se a URL está correta.';
+        } else if (err.message.includes('net::ERR_CONNECTION_REFUSED')) {
+            errorType = 'CONNECTION_ERROR';
+            userFriendlyError = 'Conexão recusada pelo servidor. O site pode estar offline.';
+        } else if (err.message.includes('net::ERR_SSL')) {
+            errorType = 'SSL_ERROR';
+            userFriendlyError = 'Erro de certificado SSL. O site pode ter problemas de segurança.';
+        }
+        
+        res.status(500).json({ 
+            error: "Scan failed", 
+            errorType: errorType,
+            details: userFriendlyError,
+            originalError: err.message
+        });
     } finally {
         if (browser) await browser.close();
     }
