@@ -577,3 +577,112 @@ func getLocalScoreColor(score int) [3]int {
 	}
 	return [3]int{239, 68, 68}       // red-500
 }
+
+// ============================================================================
+// DEPENDENCY SCANNING HANDLERS
+// ============================================================================
+
+// DependencyScanResult model for storing dependency scan results
+type DependencyScanDBResult struct {
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	LocalScanID     uint      `json:"local_scan_id"` // Link to code scan
+	Path            string    `json:"path"`
+	Results         string    `json:"results"` // JSON string of scan results
+	TotalDeps       int       `json:"total_deps"`
+	TotalVulns      int       `json:"total_vulns"`
+	CriticalCount   int       `json:"critical_count"`
+	HighCount       int       `json:"high_count"`
+	MediumCount     int       `json:"medium_count"`
+	LowCount        int       `json:"low_count"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+func handleDependencyScan(c *gin.Context) {
+	var input struct {
+		Path        string `json:"path" binding:"required"`
+		LocalScanID uint   `json:"local_scan_id"` // Optional: link to existing code scan
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Path is required"})
+		return
+	}
+
+	// Validate path exists
+	if _, err := os.Stat(input.Path); os.IsNotExist(err) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Path does not exist: " + input.Path})
+		return
+	}
+
+	log.Printf("📦 Starting dependency scan for: %s", input.Path)
+
+	// Create dependency scanner and scan directory
+	depScanner := scanner.NewDependencyScanner()
+	results, err := depScanner.ScanDirectory(input.Path)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Dependency scan failed: " + err.Error()})
+		return
+	}
+
+	// Calculate totals
+	totalDeps := 0
+	totalVulns := 0
+	criticalCount := 0
+	highCount := 0
+	mediumCount := 0
+	lowCount := 0
+
+	for _, result := range results {
+		totalDeps += result.TotalDeps
+		totalVulns += len(result.Vulnerabilities)
+		criticalCount += result.Summary.Critical
+		highCount += result.Summary.High
+		mediumCount += result.Summary.Medium
+		lowCount += result.Summary.Low
+	}
+
+	log.Printf("✅ Dependency scan complete: %d ecosystems, %d deps, %d vulnerabilities", 
+		len(results), totalDeps, totalVulns)
+
+	// Convert results to JSON for storage
+	resultsJSON, _ := json.Marshal(results)
+
+	// Auto-migrate if not exists
+	db.AutoMigrate(&DependencyScanDBResult{})
+
+	// Save to database
+	dbResult := DependencyScanDBResult{
+		LocalScanID:   input.LocalScanID,
+		Path:          input.Path,
+		Results:       string(resultsJSON),
+		TotalDeps:     totalDeps,
+		TotalVulns:    totalVulns,
+		CriticalCount: criticalCount,
+		HighCount:     highCount,
+		MediumCount:   mediumCount,
+		LowCount:      lowCount,
+	}
+
+	if err := db.Create(&dbResult).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save dependency scan result"})
+		return
+	}
+
+	// Return full result
+	c.JSON(http.StatusCreated, gin.H{
+		"id":             dbResult.ID,
+		"local_scan_id":  dbResult.LocalScanID,
+		"path":           input.Path,
+		"ecosystems":     len(results),
+		"total_deps":     totalDeps,
+		"total_vulns":    totalVulns,
+		"summary": gin.H{
+			"critical": criticalCount,
+			"high":     highCount,
+			"medium":   mediumCount,
+			"low":      lowCount,
+		},
+		"results":    results,
+		"created_at": dbResult.CreatedAt,
+	})
+}

@@ -22,6 +22,48 @@ interface CodeScanSummary {
     info: number;
 }
 
+interface DependencyVulnerability {
+    package: string;
+    version: string;
+    severity: string;
+    title: string;
+    description: string;
+    cve: string;
+    cwe: string;
+    cvss: number;
+    fix_version: string;
+    url: string;
+    ecosystem: string;
+}
+
+interface DependencyScanResult {
+    ecosystem: string;
+    total_deps: number;
+    vulnerabilities: DependencyVulnerability[];
+    summary: {
+        critical: number;
+        high: number;
+        medium: number;
+        low: number;
+    };
+}
+
+interface DependencyScanResponse {
+    id: number;
+    path: string;
+    ecosystems: number;
+    total_deps: number;
+    total_vulns: number;
+    summary: {
+        critical: number;
+        high: number;
+        medium: number;
+        low: number;
+    };
+    results: DependencyScanResult[];
+    created_at: string;
+}
+
 interface LocalScanResult {
     id: number;
     path: string;
@@ -51,11 +93,13 @@ export const CodeScannerView: React.FC<Props> = ({ onBack, apiKey }) => {
     const [aiReport, setAiReport] = useState<string | null>(null);
     const [generatingAI, setGeneratingAI] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'vulnerabilities' | 'ai-report'>('vulnerabilities');
+    const [activeTab, setActiveTab] = useState<'vulnerabilities' | 'dependencies' | 'ai-report'>('vulnerabilities');
     const [selectedModel, setSelectedModel] = useState('models/gemini-2.5-flash');
     const [showFileBrowser, setShowFileBrowser] = useState(false);
     const [scanHistory, setScanHistory] = useState<LocalScanResult[]>([]);
     const [showHistory, setShowHistory] = useState(false);
+    const [depScanResult, setDepScanResult] = useState<DependencyScanResponse | null>(null);
+    const [scanningDeps, setScanningDeps] = useState(false);
 
     // Load scan history on mount
     useEffect(() => {
@@ -168,6 +212,40 @@ export const CodeScannerView: React.FC<Props> = ({ onBack, apiKey }) => {
             setError(e.message);
         } finally {
             setGeneratingAI(false);
+        }
+    };
+
+    const handleDependencyScan = async () => {
+        if (!path.trim()) {
+            setError('Digite o caminho da pasta');
+            return;
+        }
+
+        setScanningDeps(true);
+        setError(null);
+
+        try {
+            const response = await fetch('http://localhost:8080/api/v1/scan-local/dependencies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    path: path.trim(),
+                    local_scan_id: result?.id || 0
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Dependency scan failed');
+            }
+
+            const data = await response.json();
+            setDepScanResult(data);
+            setActiveTab('dependencies');
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setScanningDeps(false);
         }
     };
 
@@ -420,7 +498,18 @@ export const CodeScannerView: React.FC<Props> = ({ onBack, apiKey }) => {
                                 }`}
                             >
                                 <i className="fas fa-bug mr-2"></i>
-                                Vulnerabilidades ({result.vulnerabilities.length})
+                                Código ({result.vulnerabilities.length})
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('dependencies')}
+                                className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
+                                    activeTab === 'dependencies'
+                                        ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600'
+                                        : 'text-slate-600 hover:bg-slate-50'
+                                }`}
+                            >
+                                <i className="fas fa-cubes mr-2"></i>
+                                Dependências {depScanResult ? `(${depScanResult.total_vulns})` : ''}
                             </button>
                             <button
                                 onClick={() => setActiveTab('ai-report')}
@@ -476,6 +565,175 @@ export const CodeScannerView: React.FC<Props> = ({ onBack, apiKey }) => {
                                                 </div>
                                             </div>
                                         ))
+                                    )}
+                                </div>
+                            )}
+
+                            {activeTab === 'dependencies' && (
+                                <div className="space-y-4">
+                                    {!depScanResult ? (
+                                        <div className="text-center py-12">
+                                            <i className="fas fa-cubes text-4xl text-slate-300 mb-4"></i>
+                                            <p className="font-medium text-slate-700 mb-2">Análise de Dependências</p>
+                                            <p className="text-sm text-slate-500 mb-4">
+                                                Detecta vulnerabilidades em package.json, go.mod, requirements.txt, composer.json
+                                            </p>
+                                            <button
+                                                onClick={handleDependencyScan}
+                                                disabled={scanningDeps}
+                                                className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2 mx-auto"
+                                            >
+                                                {scanningDeps ? (
+                                                    <>
+                                                        <i className="fas fa-spinner fa-spin"></i>
+                                                        Escaneando dependências...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <i className="fas fa-search"></i>
+                                                        Escanear Dependências
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {/* Dependency Stats */}
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                                                <div className="bg-slate-50 rounded-lg p-3 text-center">
+                                                    <div className="text-2xl font-bold text-slate-700">{depScanResult.ecosystems}</div>
+                                                    <div className="text-xs text-slate-500">Ecosystems</div>
+                                                </div>
+                                                <div className="bg-slate-50 rounded-lg p-3 text-center">
+                                                    <div className="text-2xl font-bold text-slate-700">{depScanResult.total_deps}</div>
+                                                    <div className="text-xs text-slate-500">Dependências</div>
+                                                </div>
+                                                <div className="bg-red-50 rounded-lg p-3 text-center">
+                                                    <div className="text-2xl font-bold text-red-600">
+                                                        {depScanResult.summary.critical + depScanResult.summary.high}
+                                                    </div>
+                                                    <div className="text-xs text-slate-500">Critical/High</div>
+                                                </div>
+                                                <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                                                    <div className="text-2xl font-bold text-yellow-600">
+                                                        {depScanResult.summary.medium + depScanResult.summary.low}
+                                                    </div>
+                                                    <div className="text-xs text-slate-500">Medium/Low</div>
+                                                </div>
+                                            </div>
+
+                                            {/* Rescan button */}
+                                            <div className="flex justify-end mb-4">
+                                                <button
+                                                    onClick={handleDependencyScan}
+                                                    disabled={scanningDeps}
+                                                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200 disabled:opacity-50 flex items-center gap-2"
+                                                >
+                                                    <i className={`fas ${scanningDeps ? 'fa-spinner fa-spin' : 'fa-sync'}`}></i>
+                                                    Re-escanear
+                                                </button>
+                                            </div>
+
+                                            {/* Results by ecosystem */}
+                                            {depScanResult.results.map((ecosystemResult, ecosystemIdx) => (
+                                                <div key={ecosystemIdx} className="border border-slate-200 rounded-xl overflow-hidden">
+                                                    <div className="bg-slate-50 px-4 py-3 flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold ${
+                                                                ecosystemResult.ecosystem === 'npm' ? 'bg-red-500' :
+                                                                ecosystemResult.ecosystem === 'go' ? 'bg-cyan-500' :
+                                                                ecosystemResult.ecosystem === 'pip' ? 'bg-blue-500' :
+                                                                ecosystemResult.ecosystem === 'composer' ? 'bg-purple-500' :
+                                                                'bg-slate-500'
+                                                            }`}>
+                                                                {ecosystemResult.ecosystem === 'npm' ? 'N' :
+                                                                 ecosystemResult.ecosystem === 'go' ? 'Go' :
+                                                                 ecosystemResult.ecosystem === 'pip' ? 'Py' :
+                                                                 ecosystemResult.ecosystem === 'composer' ? 'PHP' :
+                                                                 ecosystemResult.ecosystem.charAt(0).toUpperCase()}
+                                                            </span>
+                                                            <div>
+                                                                <div className="font-semibold text-slate-900 capitalize">{ecosystemResult.ecosystem}</div>
+                                                                <div className="text-xs text-slate-500">{ecosystemResult.total_deps} dependências</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            {ecosystemResult.summary.critical > 0 && (
+                                                                <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold">
+                                                                    {ecosystemResult.summary.critical} CRITICAL
+                                                                </span>
+                                                            )}
+                                                            {ecosystemResult.summary.high > 0 && (
+                                                                <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-bold">
+                                                                    {ecosystemResult.summary.high} HIGH
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {ecosystemResult.vulnerabilities.length === 0 ? (
+                                                        <div className="p-4 text-center text-slate-500 text-sm">
+                                                            <i className="fas fa-check-circle text-emerald-500 mr-2"></i>
+                                                            Nenhuma vulnerabilidade conhecida
+                                                        </div>
+                                                    ) : (
+                                                        <div className="divide-y divide-slate-100">
+                                                            {ecosystemResult.vulnerabilities.map((vuln, vulnIdx) => (
+                                                                <div key={vulnIdx} className="p-4 hover:bg-slate-50 transition-colors">
+                                                                    <div className="flex items-start justify-between mb-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getSeverityColor(vuln.severity)}`}>
+                                                                                {vuln.severity}
+                                                                            </span>
+                                                                            <span className="font-mono text-sm font-semibold text-slate-900">
+                                                                                {vuln.package}
+                                                                            </span>
+                                                                            <span className="text-xs text-slate-400">
+                                                                                {vuln.version}
+                                                                            </span>
+                                                                        </div>
+                                                                        {vuln.cvss > 0 && (
+                                                                            <span className="text-xs text-slate-500">
+                                                                                CVSS: {vuln.cvss.toFixed(1)}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    
+                                                                    <div className="text-sm text-slate-700 mb-2">{vuln.title}</div>
+                                                                    
+                                                                    {vuln.description && (
+                                                                        <div className="text-xs text-slate-500 mb-2">{vuln.description}</div>
+                                                                    )}
+                                                                    
+                                                                    <div className="flex items-center gap-4 text-xs">
+                                                                        {vuln.cve && (
+                                                                            <a 
+                                                                                href={vuln.url || `https://nvd.nist.gov/vuln/detail/${vuln.cve}`}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="text-indigo-600 hover:underline"
+                                                                            >
+                                                                                <i className="fas fa-external-link-alt mr-1"></i>
+                                                                                {vuln.cve}
+                                                                            </a>
+                                                                        )}
+                                                                        {vuln.cwe && (
+                                                                            <span className="text-slate-400">{vuln.cwe}</span>
+                                                                        )}
+                                                                        {vuln.fix_version && (
+                                                                            <span className="text-emerald-600">
+                                                                                <i className="fas fa-arrow-up mr-1"></i>
+                                                                                Fix: {vuln.fix_version}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </>
                                     )}
                                 </div>
                             )}

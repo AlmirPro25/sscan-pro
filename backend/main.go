@@ -306,6 +306,9 @@ func main() {
 		v1.GET("/browse", handleBrowseDirectory)
 		v1.GET("/browse/recent", handleGetRecentPaths)
 		
+		// Dependency scanning endpoint
+		v1.POST("/scan-local/dependencies", RateLimitMiddleware(rateLimiter), handleDependencyScan)
+		
 		// Project endpoints (SAST + DAST unified)
 		v1.POST("/projects", handleCreateProject)
 		v1.GET("/projects", handleGetProjects)
