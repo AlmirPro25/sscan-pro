@@ -317,6 +317,15 @@ func main() {
 		v1.GET("/projects/:id/dashboard", handleGetProjectDashboard)
 		v1.POST("/projects/link-scan", handleLinkScanToProject)
 		v1.POST("/projects/:id/correlate", handleCorrelateProject)
+		
+		// Advanced scanning endpoints
+		v1.POST("/scan/infrastructure", RateLimitMiddleware(rateLimiter), handleInfrastructureScan)
+		v1.POST("/scan/subdomains", RateLimitMiddleware(rateLimiter), handleSubdomainScan)
+		v1.POST("/scan/reputation", RateLimitMiddleware(rateLimiter), handleReputationScan)
+		v1.POST("/scan/authenticated", RateLimitMiddleware(rateLimiter), handleAuthenticatedScan)
+		v1.POST("/scan/advanced", RateLimitMiddleware(rateLimiter), handleAdvancedScan)
+		v1.GET("/scan/advanced/:scan_id", handleGetAdvancedScan)
+		v1.GET("/scan/advanced/history", handleGetAdvancedScanHistory)
 	}
 
 	port := os.Getenv("PORT")

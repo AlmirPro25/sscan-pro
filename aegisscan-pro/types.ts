@@ -158,5 +158,6 @@ export enum ScreenState {
     HISTORY = 'history',
     SETTINGS = 'settings',
     CODE_SCANNER = 'code_scanner',
-    PROJECTS = 'projects'
+    PROJECTS = 'projects',
+    ADVANCED_SCAN = 'advanced_scan'
 }
