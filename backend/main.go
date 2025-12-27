@@ -335,6 +335,10 @@ func main() {
 		v1.POST("/sca/typosquatting", RateLimitMiddleware(rateLimiter), handleTyposquattingScan)
 		v1.POST("/sca/iac", RateLimitMiddleware(rateLimiter), handleIACScan)
 		v1.POST("/sca/full", RateLimitMiddleware(rateLimiter), handleSCAFullScan)
+		
+		// DAST+SAST Correlation endpoints
+		v1.POST("/correlate", RateLimitMiddleware(rateLimiter), handleCorrelation)
+		v1.GET("/correlate/project/:project_id", handleQuickCorrelation)
 	}
 
 	port := os.Getenv("PORT")
