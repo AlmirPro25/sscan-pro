@@ -535,7 +535,7 @@ export const CodeScannerView: React.FC<Props> = ({ onBack, apiKey }) => {
                                             <p className="text-sm">Seu código está limpo.</p>
                                         </div>
                                     ) : (
-                                        result.vulnerabilities.map((vuln, idx) => (
+                                        result.vulnerabilities?.map((vuln, idx) => (
                                             <div key={idx} className="border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors">
                                                 <div className="flex items-start justify-between mb-3">
                                                     <div className="flex items-center gap-3">
@@ -635,7 +635,7 @@ export const CodeScannerView: React.FC<Props> = ({ onBack, apiKey }) => {
                                             </div>
 
                                             {/* Results by ecosystem */}
-                                            {depScanResult.results.map((ecosystemResult, ecosystemIdx) => (
+                                            {depScanResult.results?.map((ecosystemResult, ecosystemIdx) => (
                                                 <div key={ecosystemIdx} className="border border-slate-200 rounded-xl overflow-hidden">
                                                     <div className="bg-slate-50 px-4 py-3 flex items-center justify-between">
                                                         <div className="flex items-center gap-3">
@@ -678,7 +678,7 @@ export const CodeScannerView: React.FC<Props> = ({ onBack, apiKey }) => {
                                                         </div>
                                                     ) : (
                                                         <div className="divide-y divide-slate-100">
-                                                            {ecosystemResult.vulnerabilities.map((vuln, vulnIdx) => (
+                                                            {ecosystemResult.vulnerabilities?.map((vuln, vulnIdx) => (
                                                                 <div key={vulnIdx} className="p-4 hover:bg-slate-50 transition-colors">
                                                                     <div className="flex items-start justify-between mb-2">
                                                                         <div className="flex items-center gap-2">
