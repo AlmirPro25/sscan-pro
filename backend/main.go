@@ -326,6 +326,9 @@ func main() {
 		v1.POST("/scan/advanced", RateLimitMiddleware(rateLimiter), handleAdvancedScan)
 		v1.GET("/scan/advanced/:scan_id", handleGetAdvancedScan)
 		v1.GET("/scan/advanced/history", handleGetAdvancedScanHistory)
+		
+		// Enhanced AI report (combines DAST + Advanced + SAST)
+		v1.POST("/ai/enhanced-report", RateLimitMiddleware(rateLimiter), handleEnhancedAIReport)
 	}
 
 	port := os.Getenv("PORT")
