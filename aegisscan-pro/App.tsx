@@ -12,6 +12,7 @@ import { SettingsView } from './components/SettingsView';
 import { CodeScannerView } from './components/CodeScannerView';
 import { ProjectsView } from './components/ProjectsView';
 import { AdvancedScanView } from './components/AdvancedScanView';
+import { SCAView } from './components/SCAView';
 
 const STEPS = [
     "INITIALIZING AEGIS KERNEL v2.0...",
@@ -216,6 +217,12 @@ const App: React.FC = () => {
                         onBack={() => setScreen(ScreenState.DASHBOARD)}
                     />
                 )}
+
+                {screen === ScreenState.SCA_SCAN && (
+                    <SCAView
+                        onBack={() => setScreen(ScreenState.DASHBOARD)}
+                    />
+                )}
             </main>
 
             {/* Navigation Rail */}
@@ -225,6 +232,7 @@ const App: React.FC = () => {
                         { id: ScreenState.DASHBOARD, icon: 'chart-line', label: 'Monitor' },
                         { id: ScreenState.CODE_SCANNER, icon: 'code', label: 'Code' },
                         { id: ScreenState.ADVANCED_SCAN, icon: 'rocket', label: 'Advanced' },
+                        { id: ScreenState.SCA_SCAN, icon: 'cubes', label: 'SCA' },
                         { id: ScreenState.PROJECTS, icon: 'project-diagram', label: 'Projects' },
                         { id: ScreenState.HISTORY, icon: 'database', label: 'Vault' },
                         { id: ScreenState.SETTINGS, icon: 'sliders-h', label: 'Config' },

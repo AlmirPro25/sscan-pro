@@ -329,6 +329,12 @@ func main() {
 		
 		// Enhanced AI report (combines DAST + Advanced + SAST)
 		v1.POST("/ai/enhanced-report", RateLimitMiddleware(rateLimiter), handleEnhancedAIReport)
+		
+		// SCA (Software Composition Analysis) endpoints
+		v1.POST("/sca/licenses", RateLimitMiddleware(rateLimiter), handleLicenseScan)
+		v1.POST("/sca/typosquatting", RateLimitMiddleware(rateLimiter), handleTyposquattingScan)
+		v1.POST("/sca/iac", RateLimitMiddleware(rateLimiter), handleIACScan)
+		v1.POST("/sca/full", RateLimitMiddleware(rateLimiter), handleSCAFullScan)
 	}
 
 	port := os.Getenv("PORT")

@@ -159,5 +159,6 @@ export enum ScreenState {
     SETTINGS = 'settings',
     CODE_SCANNER = 'code_scanner',
     PROJECTS = 'projects',
-    ADVANCED_SCAN = 'advanced_scan'
+    ADVANCED_SCAN = 'advanced_scan',
+    SCA_SCAN = 'sca_scan'
 }
