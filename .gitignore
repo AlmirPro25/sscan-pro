@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+*.exe
+*.exe~
+dist/
+build/
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+*.log
+error.log
+output.log
+
+# Environment
+.env
+.env.local
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.tmp
+*.temp
+
+# Package locks (keep package-lock.json but ignore others)
+yarn.lock
+pnpm-lock.yaml

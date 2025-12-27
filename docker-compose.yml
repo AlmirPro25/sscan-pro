@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+      - worker
+    environment:
+      - DATABASE_URL=postgres://postgres:pass@db:5432/aegis
+      - WORKER_URL=http://worker:3000/scan
+      - GEMINI_API_KEY=AIzaSyBc-QqXQ8ZZSBSC57g1LYJBfTjWIr8qrac
+    networks:
+      - aegis-net
+
+  worker:
+    build:
+      context: ./backend/worker
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+    networks:
+      - aegis-net
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=aegis
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aegis-net
+
+networks:
+  aegis-net:
+    driver: bridge
+
+volumes:
+  postgres_data:

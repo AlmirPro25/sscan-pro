@@ -1,0 +1,62 @@
+stages:
+  - security
+
+aegis-security-scan:
+  stage: security
+  image: golang:1.21
+  
+  services:
+    - name: node:18
+      alias: worker
+  
+  variables:
+    AEGIS_API_URL: "http://localhost:8080"
+    TARGET_URL: "${CI_ENVIRONMENT_URL}"
+  
+  before_script:
+    # Install dependencies
+    - apt-get update && apt-get install -y curl
+    
+    # Build CLI
+    - cd cli
+    - go build -o aegis aegis.go
+    - chmod +x aegis
+    - mv aegis /usr/local/bin/
+    - cd ..
+    
+    # Start backend
+    - cd backend
+    - go build -o aegis-backend main.go
+    - ./aegis-backend &
+    - sleep 5
+    - cd ..
+    
+    # Start worker
+    - cd backend/worker
+    - npm install
+    - node server.js &
+    - sleep 5
+    - cd ../..
+  
+  script:
+    - |
+      aegis scan ${TARGET_URL} \
+        --fail-on high \
+        --output report.md \
+        --api ${AEGIS_API_URL} \
+        --api-key ${GEMINI_API_KEY}
+  
+  artifacts:
+    when: always
+    paths:
+      - report.md
+    reports:
+      junit: report.xml
+    expire_in: 30 days
+  
+  only:
+    - main
+    - develop
+    - merge_requests
+  
+  allow_failure: false

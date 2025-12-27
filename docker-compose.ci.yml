@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  aegis-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - WORKER_URL=http://aegis-worker:3000/scan
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  aegis-worker:
+    build:
+      context: ./backend/worker
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  aegis-cli:
+    build:
+      context: ./cli
+      dockerfile: Dockerfile
+    depends_on:
+      aegis-backend:
+        condition: service_healthy
+      aegis-worker:
+        condition: service_healthy
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - AEGIS_API_URL=http://aegis-backend:8080
+      - TARGET_URL=${TARGET_URL:-https://example.com}
+    command: >
+      aegis scan ${TARGET_URL:-https://example.com}
+      --fail-on high
+      --output /reports/report.md
+      --api http://aegis-backend:8080
+    volumes:
+      - ./reports:/reports

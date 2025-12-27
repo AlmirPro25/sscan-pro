@@ -1,0 +1,72 @@
+name: AegisScan Security Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Install AegisScan CLI
+      run: |
+        cd cli
+        go build -o aegis aegis.go
+        chmod +x aegis
+        sudo mv aegis /usr/local/bin/
+
+    - name: Start AegisScan Backend
+      run: |
+        cd backend
+        go build -o aegis-backend main.go
+        ./aegis-backend &
+        sleep 5
+
+    - name: Start AegisScan Worker
+      run: |
+        cd backend/worker
+        npm install
+        node server.js &
+        sleep 5
+
+    - name: Run Security Scan
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: |
+        aegis scan ${{ secrets.TARGET_URL || 'https://example.com' }} \
+          --fail-on high \
+          --output report.md \
+          --api http://localhost:8080
+
+    - name: Upload Report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-report
+        path: report.md
+
+    - name: Comment PR with Results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('report.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## 🛡️ AegisScan Security Report\n\n${report.substring(0, 5000)}\n\n[Full report in artifacts]`
+          });

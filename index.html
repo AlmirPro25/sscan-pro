@@ -1,0 +1,2437 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="emerald">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#10b981">
+    <title>AegisScan | Advanced Surface Auditor</title>
+
+    <!-- Design Tokens & Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- PDF & Utils -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <script>
+        // --- ENHANCED LOADING VISUALS ---
+        function updateLoadingText(text) {
+            const loaderText = document.getElementById('loading-text');
+            if (loaderText) loaderText.innerText = text;
+        }
+
+        async function simulateHackerLoading() {
+            const steps = [
+                "Inicializando Aegis Core v2.0...",
+                "Carregando Módulos de Penetração...",
+                "Estabelecendo Link Seguro...",
+                "Interceptando Tráfego de Rede...",
+                "Executando 'Dark Matter' Probe...",
+                "Mapeando Rotas Fantasmas (Ghost Protocol)...",
+                "Capturando Inteligência Visual...",
+                "Gerando Relatório Tático..."
+            ];
+
+            for (const step of steps) {
+                if (!document.getElementById('loading-overlay').classList.contains('hidden')) {
+                    updateLoadingText(step);
+                    await new Promise(r => setTimeout(r, 1500 + Math.random() * 1000));
+                }
+            }
+        }
+
+        // --- PDF EXPORT FUNCTION ---
+        async function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const content = document.getElementById('report-content');
+            const btn = document.getElementById('btn-export-pdf');
+
+            if (!content) return;
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando PDF...';
+            btn.disabled = true;
+
+            try {
+                // Temporarily expand scrollable areas for full capture
+                const scrollables = content.querySelectorAll('.overflow-y-auto');
+                scrollables.forEach(el => el.style.overflow = 'visible');
+
+                const canvas = await html2canvas(content, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#0f172a' // Dark background
+                });
+
+                // Restore scroll
+                scrollables.forEach(el => el.style.overflow = 'auto');
+
+                const imgData = canvas.toDataURL('image/jpeg', 0.8);
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+                const ratio = imgWidth / imgHeight;
+                const widthInMM = pdfWidth;
+                const heightInMM = widthInMM / ratio;
+
+                // Multi-page logic if needed, simple scale to fit for now or split
+                if (heightInMM > pdfHeight) {
+                    let heightLeft = heightInMM;
+                    let position = 0;
+
+                    pdf.addImage(imgData, 'JPEG', 0, position, widthInMM, heightInMM);
+                    heightLeft -= pdfHeight;
+
+                    while (heightLeft >= 0) {
+                        position = heightLeft - heightInMM;
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'JPEG', 0, position, widthInMM, heightInMM);
+                        heightLeft -= pdfHeight;
+                    }
+                } else {
+                    pdf.addImage(imgData, 'JPEG', 0, 0, widthInMM, heightInMM);
+                }
+
+                pdf.save(`AegisScan_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+
+            } catch (err) {
+                console.error("PDF Export failed:", err);
+                alert("Falha ao gerar PDF. Verifique o console.");
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Attach global export function
+        window.exportToPDF = exportToPDF;
+
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        emerald: {
+                            50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0',
+                            500: '#10b981', 600: '#059669', 700: '#047857', 900: '#064e3b'
+                        },
+                        surface: '#ffffff',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --primary: #10b981;
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(16, 185, 129, 0.1);
+            border-radius: 24px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+        }
+
+        .emerald-gradient {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+        }
+
+        .scan-progress-ring {
+            transition: stroke-dashoffset 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+            animation: screenEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes screenEnter {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .nav-active {
+            color: var(--primary);
+        }
+
+        .nav-active::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 20%;
+            width: 60%;
+            height: 4px;
+            background: var(--primary);
+            border-radius: 10px;
+        }
+
+        .btn-press:active {
+            transform: scale(0.96);
+        }
+
+        .custom-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body class="pb-28">
+
+    <!-- Loading Overlay (Hacker Theme) -->
+    <div id="loading-overlay" class="hidden fixed inset-0 bg-slate-900 z-[9999] flex items-center justify-center">
+        <div class="text-center">
+            <!-- Animated Shield Icon -->
+            <div class="relative w-32 h-32 mx-auto mb-8">
+                <div class="absolute inset-0 bg-emerald-500/20 rounded-full animate-ping"></div>
+                <div
+                    class="relative w-32 h-32 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-full flex items-center justify-center shadow-2xl">
+                    <i class="fas fa-shield-halved text-5xl text-white animate-pulse"></i>
+                </div>
+            </div>
+
+            <!-- Loading Text -->
+            <div class="space-y-4">
+                <h2 class="text-2xl font-black text-white tracking-tight">AEGIS SCAN</h2>
+                <p id="loading-text" class="text-emerald-400 font-mono text-sm animate-pulse">
+                    Inicializando sistema...
+                </p>
+
+                <!-- Progress Bar -->
+                <div class="w-80 h-1 bg-slate-800 rounded-full overflow-hidden mx-auto">
+                    <div class="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 animate-pulse"
+                        style="width: 60%"></div>
+                </div>
+
+                <!-- Hacker-style details -->
+                <div class="mt-6 space-y-1 text-[10px] font-mono text-slate-500">
+                    <div class="flex items-center justify-center gap-2">
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                        <span>CORE: ONLINE</span>
+                    </div>
+                    <div class="flex items-center justify-center gap-2">
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"
+                            style="animation-delay: 0.2s"></span>
+                        <span>SCANNER: READY</span>
+                    </div>
+                    <div class="flex items-center justify-center gap-2">
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"
+                            style="animation-delay: 0.4s"></span>
+                        <span>AI ENGINE: ACTIVE</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Header -->
+    <header class="fixed top-0 left-0 right-0 z-50 px-6 py-6 glass-card rounded-none border-b border-emerald-50"
+        role="banner">
+        <div class="flex items-center justify-between max-w-lg mx-auto">
+            <div class="flex items-center gap-3">
+                <div
+                    class="w-10 h-10 emerald-gradient rounded-xl flex items-center justify-center text-white shadow-lg">
+                    <i class="fas fa-shield-halved text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-extrabold tracking-tight leading-none">AEGIS SCAN</h1>
+                    <span class="text-[9px] uppercase font-bold text-emerald-600 tracking-[0.2em]">Enterprise Surface
+                        Auditor</span>
+                </div>
+            </div>
+            <div id="connection-node"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200"
+                aria-live="polite">
+                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span class="text-[10px] font-bold text-slate-600 uppercase">System Ready</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto max-w-lg px-6 mt-32" role="main">
+
+        <!-- DASHBOARD -->
+        <section id="screen-dashboard" class="screen active" aria-labelledby="dash-title">
+            <header class="mb-8">
+                <h2 id="dash-title" class="text-3xl font-extrabold text-slate-900 mb-2">Discovery Hub</h2>
+                <p class="text-slate-500 text-sm">Auditoria profunda de infraestrutura de rede.</p>
+            </header>
+
+            <!-- URL Input Module -->
+            <div class="glass-card p-6 mb-8 border-2 border-emerald-50">
+                <label for="target-url"
+                    class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Target Application
+                    URL</label>
+                <div class="relative group">
+                    <input type="url" id="target-url" placeholder="https://app-vulneravel.com"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        aria-required="true">
+                    <button onclick="app.startAudit()"
+                        class="absolute right-2 top-2 bottom-2 bg-emerald-500 text-white px-5 rounded-xl font-bold btn-press shadow-md hover:bg-emerald-600 transition-colors">
+                        <i class="fas fa-bolt mr-2"></i> SCAN
+                    </button>
+                </div>
+                <p class="mt-3 text-[10px] text-slate-400 font-medium">
+                    <i class="fas fa-info-circle mr-1"></i> O Playwright irá interceptar XHR, Fetch e ativos de mídia.
+                </p>
+            </div>
+
+            <!-- Dashboard Stats -->
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="glass-card p-5 border-l-4 border-emerald-500">
+                    <div class="text-emerald-500 mb-2"><i class="fas fa-radar text-lg"></i></div>
+                    <div class="text-3xl font-black text-slate-800" id="stat-scans">0</div>
+                    <div class="text-[10px] text-slate-400 font-bold uppercase">Auditorias</div>
+                </div>
+                <div class="glass-card p-5 border-l-4 border-blue-500">
+                    <div class="text-blue-500 mb-2"><i class="fas fa-project-diagram text-lg"></i></div>
+                    <div class="text-3xl font-black text-slate-800" id="stat-leaks">0</div>
+                    <div class="text-[10px] text-slate-400 font-bold uppercase">Endpoints</div>
+                </div>
+            </div>
+
+            <!-- Analytics Dashboard -->
+            <div id="analytics-dashboard" class="hidden mb-8">
+                <div class="glass-card p-6 border-2 border-blue-500">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-black text-slate-800">Analytics Dashboard</h3>
+                        <button onclick="app.toggleAnalytics()" class="text-blue-500 text-xs font-bold">
+                            <i class="fas fa-chart-line mr-1"></i> Ver Detalhes
+                        </button>
+                    </div>
+                    <!-- SMART ANALYTICS ENGINE -->
+                    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+                    <div class="glass-card p-6 border border-slate-200 shadow-sm relative overflow-hidden">
+                        <div class="absolute top-0 right-0 p-4 opacity-10">
+                            <i class="fas fa-project-diagram text-6xl text-blue-600"></i>
+                        </div>
+
+                        <div class="flex justify-between items-center mb-6">
+                            <div>
+                                <h3 class="text-lg font-black text-slate-800">Deep Link Topology</h3>
+                                <p class="text-xs text-slate-500 font-medium">Visualização neural da estrutura de
+                                    navegação e assets.</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <span
+                                    class="px-2 py-1 bg-blue-100 text-blue-600 rounded text-[10px] font-bold">Nodes</span>
+                                <span
+                                    class="px-2 py-1 bg-purple-100 text-purple-600 rounded text-[10px] font-bold">Edges</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                            <!-- Stats Column -->
+                            <div class="space-y-4 col-span-1">
+                                <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg
+                                        Score</div>
+                                    <div class="text-3xl font-black text-slate-800" id="avg-score">--</div>
+                                    <div class="w-full bg-slate-200 h-1 rounded-full mt-2 overflow-hidden">
+                                        <div id="score-bar"
+                                            class="bg-emerald-500 h-full w-0 transition-all duration-1000"></div>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                                        <div class="text-[10px] text-blue-400 font-bold uppercase">Links</div>
+                                        <div class="text-xl font-black text-blue-600" id="total-endpoints">0</div>
+                                    </div>
+                                    <div class="p-3 bg-purple-50/50 rounded-xl border border-purple-100">
+                                        <div class="text-[10px] text-purple-400 font-bold uppercase">Scans</div>
+                                        <div class="text-xl font-black text-purple-600" id="scan-count">0</div>
+                                    </div>
+                                </div>
+
+                                <div class="p-4 bg-slate-800 rounded-xl text-white relative overflow-hidden group cursor-pointer hover:shadow-lg transition-all"
+                                    onclick="app.refreshTopology()">
+                                    <div
+                                        class="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 opacity-20 group-hover:opacity-30 transition-opacity">
+                                    </div>
+                                    <div class="relative z-10 flex items-center justify-between">
+                                        <span class="text-xs font-bold">Update Map</span>
+                                        <i
+                                            class="fas fa-sync-alt group-hover:rotate-180 transition-transform duration-700"></i>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Graph Column -->
+                            <div
+                                class="col-span-1 lg:col-span-3 bg-slate-50 rounded-xl border border-slate-200 relative h-[300px]">
+                                <div id="network-topology" class="w-full h-full"></div>
+                                <div id="network-loading"
+                                    class="absolute inset-0 flex flex-col items-center justify-center bg-slate-50/80 hidden z-10">
+                                    <i class="fas fa-circle-nodes animate-bounce text-blue-500 mb-2"></i>
+                                    <span class="text-xs font-bold text-slate-400">Rendering Neural Map...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 class="font-bold text-slate-900 mb-4 flex items-center justify-between">
+                        <span>Últimas Descobertas</span>
+                        <button onclick="app.showScreen('history')"
+                            class="text-emerald-600 text-[10px] font-bold uppercase">Ver
+                            Todos</button>
+                    </h3>
+
+                    <div id="recent-audits" class="space-y-4">
+                        <div class="text-center py-12 glass-card border-dashed border-slate-200">
+                            <p class="text-slate-400 text-sm">Pronto para iniciar a primeira análise.</p>
+                        </div>
+                    </div>
+        </section>
+
+        <!-- SCANNING ANIMATION -->
+        <section id="screen-scanning" class="screen">
+            <div class="flex flex-col items-center justify-center min-h-[50vh]">
+                <div class="relative w-56 h-56 mb-10">
+                    <svg class="w-full h-full" viewBox="0 0 200 200">
+                        <circle cx="100" cy="100" r="90" stroke="#f1f5f9" stroke-width="10" fill="transparent"></circle>
+                        <circle id="progress-circle" class="scan-progress-ring" cx="100" cy="100" r="90"
+                            stroke="#10b981" stroke-width="10" stroke-dasharray="565.48" stroke-dashoffset="565.48"
+                            stroke-linecap="round" fill="transparent"></circle>
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span id="progress-percent" class="text-5xl font-black text-slate-800">0%</span>
+                        <span
+                            class="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">Analyzing</span>
+                    </div>
+                </div>
+                <h3 class="text-xl font-bold text-slate-900 mb-2" id="scan-title">Injetando Playwright...</h3>
+                <p id="status-text" class="text-slate-500 text-sm animate-pulse max-w-xs text-center">Mapeando
+                    superfícies de rede e protocolos de mídia.</p>
+            </div>
+        </section>
+
+        <!-- REPORT VIEW -->
+        <section id="screen-report" class="screen">
+            <div class="flex items-center justify-between mb-8">
+                <button onclick="app.showScreen('dashboard')"
+                    class="text-slate-500 font-bold text-xs flex items-center gap-2 btn-press">
+                    <i class="fas fa-arrow-left"></i> VOLTAR AO HUB
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="app.downloadPDF()"
+                        class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shadow-sm btn-press"
+                        title="Download PDF">
+                        <i class="fas fa-file-pdf"></i>
+                    </button>
+                    <button onclick="app.toggleAssetsExplorer()"
+                        class="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center shadow-sm btn-press"
+                        title="Ver Mídias">
+                        <i class="fas fa-images"></i>
+                    </button>
+                    <button onclick="app.shareReport()"
+                        class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-sm btn-press"
+                        title="Compartilhar">
+                        <i class="fas fa-share-nodes"></i>
+                    </button>
+                    <button onclick="app.exportJSON()"
+                        class="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-sm btn-press"
+                        title="Export JSON">
+                        <i class="fas fa-code"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Assets Explorer Modal -->
+            <div id="assets-explorer-modal"
+                class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                <div
+                    class="glass-card max-w-5xl w-full h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-emerald-500/30">
+                    <div class="flex items-center justify-between p-6 border-b border-white/10 bg-slate-900/50">
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                                <i class="fas fa-layer-group text-lg"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-white tracking-tight">Assets Explorer</h3>
+                                <p class="text-[10px] uppercase font-bold text-emerald-500 tracking-widest">Deep Surface
+                                    Extraction</p>
+                            </div>
+                        </div>
+                        <button onclick="app.toggleAssetsExplorer()"
+                            class="text-slate-400 hover:text-white transition-colors bg-white/5 w-8 h-8 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <!-- Tabs -->
+                    <div class="flex px-6 pt-4 border-b border-white/5 bg-slate-900/30 gap-6">
+                        <button onclick="app.switchAssetTab('videos')" id="tab-videos"
+                            class="asset-tab active pb-3 text-sm font-bold text-slate-300 border-b-2 border-transparent hover:text-white transition-all uppercase tracking-wider text-[11px]">
+                            <i class="fas fa-film mr-2"></i>Videos & Streams
+                        </button>
+                        <button onclick="app.switchAssetTab('images')" id="tab-images"
+                            class="asset-tab pb-3 text-sm font-bold text-slate-300 border-b-2 border-transparent hover:text-white transition-all uppercase tracking-wider text-[11px]">
+                            <i class="fas fa-images mr-2"></i>Image Gallery
+                        </button>
+                        <button onclick="app.switchAssetTab('docs')" id="tab-docs"
+                            class="asset-tab pb-3 text-sm font-bold text-slate-300 border-b-2 border-transparent hover:text-white transition-all uppercase tracking-wider text-[11px]">
+                            <i class="fas fa-file-contract mr-2"></i>Docs & Fonts
+                        </button>
+                    </div>
+
+                    <!-- Content Area -->
+                    <div class="flex-1 overflow-y-auto p-6 bg-slate-900/80 custom-scroll relative">
+                        <!-- Video Section -->
+                        <div id="panel-videos" class="asset-panel space-y-6">
+                            <!-- Injected via JS -->
+                        </div>
+
+                        <!-- Image Section -->
+                        <div id="panel-images" class="asset-panel hidden">
+                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="image-grid">
+                                <!-- Injected via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Docs Section -->
+                        <div id="panel-docs" class="asset-panel hidden space-y-4">
+                            <!-- Injected via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="report-content" class="space-y-6">
+                <!-- Dynamically Generated -->
+            </div>
+
+            <!-- AI Chat Section (appears after report) -->
+            <div id="ai-chat-section" class="hidden mt-8 pb-32">
+                <div class="glass-card p-6 border-2 border-blue-500">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-black text-slate-800">Chat com Aegis AI</h3>
+                            <p class="text-[10px] text-slate-500">Esclareça dúvidas sobre o relatório</p>
+                        </div>
+                    </div>
+
+                    <div id="chat-messages" class="space-y-3 mb-4 max-h-96 overflow-y-auto custom-scroll">
+                        <!-- Messages here -->
+                    </div>
+
+                    <div class="flex gap-2">
+                        <input type="text" id="chat-input"
+                            placeholder="Pergunte sobre vulnerabilidades, endpoints, etc..."
+                            class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            onkeypress="if(event.key==='Enter') app.sendChatMessage()">
+                        <button onclick="app.sendChatMessage()"
+                            class="px-6 py-3 bg-blue-500 text-white rounded-xl font-bold btn-press shadow-md hover:bg-blue-600">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                        ```html
+                    </div>
+        </section>
+
+        <!-- HISTORY VIEW -->
+        <section id="screen-history" class="screen hidden">
+            <header class="mb-8">
+                <h2 class="text-3xl font-extrabold text-slate-900 mb-2">Vault</h2>
+                <p class="text-slate-500 text-sm">Histórico completo de auditorias persistidas.</p>
+                <div class="mt-4 flex gap-2">
+                    <button onclick="app.toggleCompareMode()" id="compare-mode-btn"
+                        class="px-4 py-2 bg-blue-500 text-white rounded-xl text-xs font-bold btn-press">
+                        <i class="fas fa-code-compare mr-2"></i>Modo Comparação
+                    </button>
+                    <button onclick="app.compareSelected()" id="compare-execute-btn"
+                        class="hidden px-4 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold btn-press">
+                        <i class="fas fa-check mr-2"></i>Comparar Selecionados
+                    </button>
+                </div>
+            </header>
+
+            <div id="vault-list" class="space-y-4 pb-20">
+                <div class="text-center py-12 glass-card border-dashed border-slate-200">
+                    <p class="text-slate-400 text-sm">Carregando vault...</p>
+                </div>
+            </div>
+
+            <!-- Comparison Modal -->
+            <div id="comparison-modal"
+                class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                <div class="glass-card max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                    <div class="flex items-center justify-between p-6 border-b border-slate-100">
+                        <h3 class="text-lg font-black text-slate-800">Comparação de Scans</h3>
+                        <button onclick="app.closeComparison()" class="text-slate-400 hover:text-slate-600">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div id="comparison-content" class="p-6">
+                        <!-- Comparison content here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SETTINGS VIEW -->
+        <section id="screen-settings" class="screen hidden">
+            <header class="mb-8">
+                <h2 class="text-3xl font-extrabold text-slate-900 mb-2">Engine</h2>
+                <p class="text-slate-500 text-sm">Configurações do núcleo de auditoria Aegis.</p>
+            </header>
+
+            <div class="space-y-6 pb-20">
+                <div class="glass-card p-6">
+                    <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Worker Configuration
+                    </h4>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-sm font-bold">Deep Interception</div>
+                                <div class="text-[10px] text-slate-400">Capturar todos os pacotes XHR/Fetch</div>
+                            </div>
+                            <div class="w-12 h-6 bg-emerald-500 rounded-full relative shadow-inner">
+                                <div class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-sm font-bold">Headless Mode</div>
+                                <div class="text-[10px] text-slate-400">Rodar instâncias Chromium ocultas</div>
+                            </div>
+                            <div class="w-12 h-6 bg-emerald-500 rounded-full relative shadow-inner">
+                                <div class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card p-6">
+                    <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Gemini AI Configuration
+                    </h4>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Preferred
+                                Model</label>
+                            <select id="ai-model-select" onchange="app.saveSettings()"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none">
+                                <option value="models/gemini-3-flash-preview">Gemini 3 Flash Preview (Recomendado)</option>
+                                <option value="models/gemini-robotics-er-1.5-preview">Gemini Robotics ER 1.5 Preview</option>
+                                <option value="models/gemini-2.0-flash-exp">Gemini 2.0 Flash Experimental</option>
+                            </select>
+                        </div>
+                        <div id="custom-model-box" class="hidden">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Custom Model
+                                ID</label>
+                            <input type="text" id="ai-custom-model" onchange="app.saveSettings()"
+                                placeholder="models/gemini-..."
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none">
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Google API Key</label>
+                        <input type="password" id="ai-api-key" onchange="app.saveSettings()"
+                            placeholder="Paste your key here..." value="AIzaSyBc-QqXQ8ZZSBSC57g1LYJBfTjWIr8qrac"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none">
+                        <p class="text-[8px] text-slate-400 mt-1 font-bold">Your key is stored locally in your browser.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="glass-card p-6 border-l-4 border-red-500">
+                    <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Danger Zone</h4>
+                    <button onclick="app.clearVault()"
+                        class="w-full py-3 bg-red-50 text-red-600 rounded-xl font-bold text-xs btn-press">
+                        <i class="fas fa-trash-can mr-2"></i> LIMPAR TODO O VAULT
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Navigation Rail -->
+    <nav class="fixed bottom-0 left-0 right-0 glass-card rounded-none border-t border-slate-100 px-8 py-4 z-50"
+        role="navigation">
+        <div class="max-w-lg mx-auto flex justify-between items-center">
+            <button onclick="app.showScreen('dashboard')"
+                class="relative flex flex-col items-center gap-1 nav-btn nav-active" data-screen="dashboard">
+                <i class="fas fa-house-chimney text-xl"></i>
+                <span class="text-[9px] font-black uppercase tracking-tighter">Terminal</span>
+            </button>
+            <button onclick="app.showScreen('history')" class="relative flex flex-col items-center gap-1 nav-btn"
+                data-screen="history">
+                <i class="fas fa-database text-xl"></i>
+                <span class="text-[9px] font-black uppercase tracking-tighter">Vault</span>
+            </button>
+            <button onclick="app.showScreen('settings')" class="relative flex flex-col items-center gap-1 nav-btn"
+                data-screen="settings">
+                <i class="fas fa-gear text-xl"></i>
+                <span class="text-[9px] font-black uppercase tracking-tighter">Engine</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Core Engine Logic -->
+    <script>
+        class AegisApp {
+            constructor() {
+                this.db = null;
+                this.activeAudit = null;
+                this.apiBase = "http://localhost:8080/api/v1";
+                this.settings = {
+                    model: 'models/gemini-3-flash-preview',
+                    customModel: localStorage.getItem('aegis_custom_model') || '',
+                    key: localStorage.getItem('aegis_key') || 'AIzaSyD5fRNYxE2IaE40SMd7OgkUnVTIFwXME30'
+                };
+                this.compareMode = false;
+                this.selectedScans = [];
+                this.chart = null;
+                this.init();
+            }
+
+            async init() {
+                await this.initStorage();
+                this.loadDashboardData();
+                this.loadDashboardStats();
+                this.syncSettings();
+                console.log("🛡️ AegisScan Engine Online");
+            }
+
+            syncSettings() {
+                const select = document.getElementById('ai-model-select');
+                const customBox = document.getElementById('custom-model-box');
+                const customInput = document.getElementById('ai-custom-model');
+
+                if (select) {
+                    // Check if value exists in options, if not use 'custom'
+                    const options = Array.from(select.options).map(o => o.value);
+                    if (options.includes(this.settings.model)) {
+                        select.value = this.settings.model;
+                    } else {
+                        select.value = 'custom';
+                        this.settings.customModel = this.settings.model;
+                    }
+                }
+
+                if (customInput) customInput.value = this.settings.customModel;
+                if (customBox) customBox.classList.toggle('hidden', select.value !== 'custom');
+
+                const keyInput = document.getElementById('ai-api-key');
+                if (keyInput) keyInput.value = this.settings.key;
+            }
+
+            saveSettings() {
+                const select = document.getElementById('ai-model-select');
+                const customBox = document.getElementById('custom-model-box');
+                const customInput = document.getElementById('ai-custom-model');
+                const keyInput = document.getElementById('ai-api-key');
+
+                if (select) {
+                    if (select.value === 'custom' && customInput) {
+                        this.settings.model = customInput.value;
+                        this.settings.customModel = customInput.value;
+                        localStorage.setItem('aegis_custom_model', customInput.value);
+                    } else {
+                        this.settings.model = select.value;
+                    }
+                    localStorage.setItem('aegis_model', this.settings.model);
+                    if (customBox) customBox.classList.toggle('hidden', select.value !== 'custom');
+                }
+
+                if (keyInput) {
+                    this.settings.key = keyInput.value;
+                    localStorage.setItem('aegis_key', keyInput.value);
+                }
+                this.notify(`Configurações salvas.`);
+            }
+
+            async initStorage() {
+                return new Promise((resolve) => {
+                    const request = indexedDB.open("AegisVault", 1);
+                    request.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        db.createObjectStore("scans", { keyPath: "id", autoIncrement: true });
+                    };
+                    request.onsuccess = (e) => {
+                        this.db = e.target.result;
+                        resolve();
+                    };
+                });
+            }
+
+            showScreen(name) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                const target = document.getElementById('screen-' + name);
+                if (target) target.classList.add('active');
+
+                document.querySelectorAll('.nav-btn').forEach(b => {
+                    b.classList.toggle('nav-active', b.dataset.screen === name);
+                });
+
+                if (name === 'history') this.loadVaultList();
+
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            async clearVault() {
+                if (!confirm("Atenção: Isso irá apagar todas as auditorias locais. Deseja continuar?")) return;
+                const tx = this.db.transaction("scans", "readwrite");
+                await tx.objectStore("scans").clear();
+                this.notify("Vault limpo com sucesso.");
+                this.loadDashboardData();
+                this.showScreen('dashboard');
+            }
+
+            async loadVaultList() {
+                const tx = this.db.transaction("scans", "readonly");
+                const store = tx.objectStore("scans");
+                const all = await new Promise(r => {
+                    const req = store.getAll();
+                    req.onsuccess = () => r(req.result);
+                });
+
+                const list = document.getElementById('vault-list');
+                if (all.length === 0) {
+                    list.innerHTML = `<div class="text-center py-20 opacity-40"><p>Nenhuma auditoria no vault.</p></div>`;
+                    return;
+                }
+
+                list.innerHTML = all.reverse().map(s => {
+                    const isSelected = this.selectedScans.includes(s.id);
+                    const clickAction = this.compareMode
+                        ? `app.selectScanForComparison(${s.id})`
+                        : `app.viewAudit(${s.id})`;
+
+                    return `
+                    <div class="glass-card p-5 flex items-center justify-between hover:border-emerald-300 transition-all cursor-pointer group ${isSelected ? 'border-2 border-blue-500 bg-blue-50' : ''}" onclick="${clickAction}">
+                        <div class="flex items-center gap-4">
+                            ${this.compareMode ? `
+                                <div class="w-6 h-6 rounded-full border-2 ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300'} flex items-center justify-center">
+                                    ${isSelected ? '<i class="fas fa-check text-white text-xs"></i>' : ''}
+                                </div>
+                            ` : ''}
+                            <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-all">
+                                <i class="fas fa-file-shield text-lg"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-black text-slate-800 truncate w-48">${s.target.replace(/^https?:\/\//, '')}</h4>
+                                <div class="flex gap-2 mt-1">
+                                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">${new Date(s.created_at || s.timestamp).toLocaleString()}</span>
+                                    <span class="text-[9px] font-black text-emerald-500">${s.score}% Match</span>
+                                </div>
+                            </div>
+                        </div>
+                        <i class="fas fa-chevron-right text-xs text-slate-300 group-hover:text-emerald-500 transition-all"></i>
+                    </div>
+                `;
+                }).join('');
+            }
+
+            async startAudit() {
+                const urlInput = document.getElementById('target-url');
+                const url = urlInput.value.trim();
+
+                if (!url.match(/^https?:\/\/.+/)) {
+                    this.notify("URL inválida. Protocolo HTTP/HTTPS obrigatório.");
+                    return;
+                }
+
+                // Show loading overlay with hacker theme
+                const overlay = document.getElementById('loading-overlay');
+                overlay.classList.remove('hidden');
+                simulateHackerLoading();
+
+                this.showScreen('scanning');
+                this.updateProgress(10, "Conectando ao Backend...");
+
+                try {
+                    const response = await fetch(`${this.apiBase}/scan`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url })
+                    });
+
+                    if (!response.ok) throw new Error("Erro na comunicação com o backend.");
+
+                    const result = await response.json();
+
+                    // Emulation of progress steps
+                    const steps = [
+                        { p: 30, t: "Alocando Chromium Instanceless..." },
+                        { p: 50, t: "Interceptando tráfego de rede..." },
+                        { p: 75, t: "Extraindo manifestos e protocolos..." },
+                        { p: 90, t: "Finalizando auditoria..." },
+                        { p: 100, t: "Processamento concluído." }
+                    ];
+
+                    for (const step of steps) {
+                        await new Promise(r => setTimeout(r, 600));
+                        this.updateProgress(step.p, step.t);
+                    }
+
+                    // Pre-process endpoints and metadata if they come as strings
+                    if (typeof result.endpoints === 'string') {
+                        try { result.endpoints = JSON.parse(result.endpoints); } catch (e) { result.endpoints = []; }
+                    }
+                    if (typeof result.metadata === 'string') {
+                        try {
+                            const meta = JSON.parse(result.metadata);
+                            result.media = meta.media;
+                            result.schema = meta.schema;
+                            result.tech = meta.tech;
+                            result.seo = meta.seo;
+                            result.assets = meta.assets;
+                            result.full_links = meta.full_links;
+                            result.performance = meta.performance;
+                            result.discovery = meta.discovery;
+                            result.security_audit = meta.security_audit; // RED TEAM DATA
+                            result.screenshot = meta.screenshot; // VISUAL INTEL
+                            result.site_map = meta.site_map; // DEEP NAV
+                        } catch (e) { }
+                    }
+
+                    // Default structure if missing
+                    result.media = result.media || { player: "Discovery Mode", streams: [], encryption: "N/A" };
+                    result.schema = result.schema || ["Header", "Content", "Footer"];
+                    result.security_audit = result.security_audit || {
+                        exposed_files: [],
+                        leaked_secrets: [],
+                        attack_vectors: { forms: [], url_parameters: [] },
+                        ghost_routes: []
+                    };
+                    result.screenshot = result.screenshot || null;
+                    result.site_map = result.site_map || { nodes: [] };
+
+                    await this.saveScan(result);
+                    this.renderReport(result);
+
+                    // Hide loading overlay
+                    overlay.classList.add('hidden');
+
+                    setTimeout(() => this.showScreen('report'), 500);
+
+                } catch (err) {
+                    // Hide loading overlay on error
+                    overlay.classList.add('hidden');
+                    this.notify("Falha crítica: " + err.message);
+                    this.showScreen('dashboard');
+                }
+            }
+
+            updateProgress(val, text) {
+                const ring = document.getElementById('progress-circle');
+                const percentLabel = document.getElementById('progress-percent');
+                const statusLabel = document.getElementById('status-text');
+
+                const circumference = 565.48;
+                const offset = circumference - (val / 100) * circumference;
+
+                if (ring) ring.style.strokeDashoffset = offset;
+                if (percentLabel) percentLabel.innerText = `${val}%`;
+                if (statusLabel) statusLabel.innerText = text;
+            }
+
+            async saveScan(data) {
+                const tx = this.db.transaction("scans", "readwrite");
+                await tx.objectStore("scans").add(data);
+                this.loadDashboardData();
+            }
+
+            async loadDashboardData() {
+                try {
+                    const tx = this.db.transaction("scans", "readonly");
+                    const store = tx.objectStore("scans");
+                    const all = await new Promise(r => {
+                        const req = store.getAll();
+                        req.onsuccess = () => r(req.result);
+                    });
+
+                    // 1. Update Key Stats
+                    const totalScans = all.length;
+                    const totalEndpoints = all.reduce((acc, s) => {
+                        let count = 0;
+                        if (Array.isArray(s.endpoints)) count = s.endpoints.length;
+                        else if (typeof s.endpoints === 'string' && s.endpoints.startsWith('[')) {
+                            try { count = JSON.parse(s.endpoints).length; } catch (e) { }
+                        }
+                        return acc + count;
+                    }, 0);
+
+                    const avgScore = totalScans > 0
+                        ? Math.round(all.reduce((acc, s) => acc + (parseInt(s.score) || 0), 0) / totalScans)
+                        : 0;
+
+                    // Update DOM (with animations potentially)
+                    const elScore = document.getElementById('avg-score');
+                    if (elScore) elScore.innerText = avgScore;
+
+                    const elBar = document.getElementById('score-bar');
+                    if (elBar) elBar.style.width = `${avgScore}%`;
+
+                    const elEndp = document.getElementById('total-endpoints');
+                    if (elEndp) elEndp.innerText = totalEndpoints.toLocaleString();
+
+                    const elCount = document.getElementById('scan-count');
+                    if (elCount) elCount.innerText = totalScans;
+
+                    // 2. Refresh Topology (Latest Scan)
+                    if (all.length > 0) {
+                        this.latestScanForTopology = all[all.length - 1];
+                        this.refreshTopology();
+                    }
+
+                    // 3. Update Recent List
+                    const recentList = document.getElementById('recent-audits');
+                    if (recentList && all.length > 0) {
+                        recentList.innerHTML = all.slice().reverse().slice(0, 5).map(s => `
+                            <div class="glass-card p-4 flex items-center justify-between hover:border-emerald-200 transition-all cursor-pointer group" onclick="app.viewAudit(${s.id})">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                                        <i class="fas fa-globe"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-black truncate w-40 text-slate-700">${s.target.replace(/^https?:\/\//, '')}</div>
+                                        <div class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">${new Date(s.created_at || s.timestamp).toLocaleDateString()}</div>
+                                    </div>
+                                </div>
+                                <div class="text-emerald-500"><i class="fas fa-chevron-right text-xs"></i></div>
+                            </div>
+                        `).join('');
+                    }
+                } catch (e) { console.error("Dashboard Load Error:", e); }
+            }
+
+            refreshTopology() {
+                const container = document.getElementById('network-topology');
+                const loading = document.getElementById('network-loading');
+                if (!container || !this.latestScanForTopology) return;
+
+                if (loading) loading.classList.remove('hidden');
+
+                setTimeout(() => {
+                    const scan = this.latestScanForTopology;
+                    const nodes = [];
+                    const edges = [];
+                    let nodeId = 1;
+
+                    // Parse Metadata
+                    let metadata = {};
+                    if (typeof scan.metadata === 'string') {
+                        try { metadata = JSON.parse(scan.metadata); } catch (e) { }
+                    } else {
+                        metadata = scan.metadata || {};
+                    }
+
+                    // 1. Root Node
+                    nodes.push({
+                        id: 0,
+                        label: new URL(scan.target).hostname,
+                        shape: 'hexagon',
+                        color: '#2563eb',
+                        font: { color: 'white' },
+                        size: 30
+                    });
+
+                    // 2. Site Map Nodes (Deep Nav)
+                    if (metadata.site_map && metadata.site_map.nodes) {
+                        metadata.site_map.nodes.forEach(node => {
+                            if (node.type === 'CHILD') {
+                                try {
+                                    const label = new URL(node.url).pathname;
+                                    nodes.push({ id: nodeId, label: label, shape: 'dot', color: '#10b981', size: 15 });
+                                    edges.push({ from: 0, to: nodeId });
+                                    nodeId++;
+                                } catch (e) { }
+                            }
+                        });
+                    }
+
+                    // 3. Ghost Routes (Red Team)
+                    if (metadata.security_audit && metadata.security_audit.ghost_routes) {
+                        metadata.security_audit.ghost_routes.slice(0, 5).forEach(route => {
+                            nodes.push({ id: nodeId, label: route, shape: 'triangle', color: '#ef4444', size: 12 });
+                            edges.push({ from: 0, to: nodeId, dashes: true, color: { color: '#ef4444' } });
+                            nodeId++;
+                        });
+                    }
+
+                    // 4. Endpoints fallback if map is empty
+                    if (nodes.length === 1) {
+                        let parsedEndpoints = [];
+                        if (Array.isArray(scan.endpoints)) parsedEndpoints = scan.endpoints;
+                        else if (typeof scan.endpoints === 'string') {
+                            try { parsedEndpoints = JSON.parse(scan.endpoints); } catch (e) { }
+                        }
+
+                        parsedEndpoints.slice(0, 8).forEach(ep => {
+                            try {
+                                const urlObj = new URL(ep.url);
+                                // Simple clustering
+                                const label = urlObj.pathname.split('/').pop() || 'index';
+                                nodes.push({ id: nodeId, label: label.substring(0, 10), shape: 'dot', color: '#8b5cf6', size: 10 });
+                                edges.push({ from: 0, to: nodeId });
+                                nodeId++;
+                            } catch (e) { }
+                        });
+                    }
+
+                    const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+                    const options = {
+                        physics: {
+                            stabilization: false,
+                            barnesHut: { gravitationalConstant: -2000, springLength: 100 }
+                        },
+                        nodes: {
+                            font: { face: 'Inter', size: 10, align: 'center' },
+                            borderWidth: 2
+                        },
+                        edges: {
+                            color: { color: '#cbd5e1', inherit: false },
+                            smooth: { type: 'continuous' }
+                        },
+                        interaction: { hover: true, tooltipDelay: 200 }
+                    };
+
+                    new vis.Network(container, data, options);
+                    if (loading) loading.classList.add('hidden');
+                }, 500); // Simulate processing delay for effect
+            }
+
+            renderReport(data) {
+                this.activeAudit = data;
+                const container = document.getElementById('report-content');
+
+                const copyBtn = (url) => `
+                    <button onclick="app.copyToClipboard('${url}')" class="text-slate-400 hover:text-emerald-500 transition-colors ml-2" title="Copy Link">
+                        <i class="fas fa-copy text-[10px]"></i>
+                    </button>
+                `;
+
+                const generateAIReportBtn = `
+                    <div id="ai-report-trigger" class="glass-card p-6 border-2 border-emerald-500 bg-emerald-50/50">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-lg animate-pulse">
+                                <i class="fas fa-brain text-xl"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-black text-slate-800">Análise Inteligente Aegis AI</h4>
+                                <p class="text-[10px] text-slate-500 font-bold uppercase">Usando ${this.settings.model}</p>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-slate-600 mb-4 font-medium">Gere um relatório técnico masterizado com sugestões de arquitetura e mitigação de vulnerabilidades usando inteligência artificial.</p>
+                        <button onclick="app.generateAIReport()" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs btn-press shadow-xl flex items-center justify-center gap-2">
+                             <i class="fas fa-sparkles"></i> GERAR RELATÓRIO MASTER
+                        </button>
+                    </div>
+                `;
+
+                container.innerHTML = `
+                    <div class="glass-card p-6 emerald-gradient text-white">
+                        <span class="text-[9px] font-black uppercase tracking-[0.2em] opacity-80">Enterprise Deep Auditor</span>
+                        <h2 class="text-xl font-black truncate mb-4">${data.target}</h2>
+                        <div class="flex gap-4">
+                            <div class="bg-white/20 px-3 py-1 rounded-lg">
+                                <span class="text-[10px] font-bold block opacity-60">Status</span>
+                                <span class="text-xs font-black">COMPLETED</span>
+                            </div>
+                            <div class="bg-white/20 px-3 py-1 rounded-lg">
+                                <span class="text-[10px] font-bold block opacity-60">Audit Score</span>
+                                <span class="text-xs font-black">${data.score}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${generateAIReportBtn}
+
+                    <div id="ai-report-container" class="hidden space-y-4">
+                        <div class="glass-card p-6 border-2 border-emerald-500 bg-white">
+                             <div class="flex items-center justify-between mb-4 border-b border-emerald-50 pb-3">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-robot text-emerald-500"></i>
+                                    <span class="text-xs font-black uppercase tracking-widest text-slate-800">Master AI Review</span>
+                                </div>
+                                <span class="text-[9px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">CONFIDENCIAL</span>
+                             </div>
+                             <div id="ai-report-body" class="prose prose-sm max-w-none text-slate-700 leading-relaxed text-[11px]">
+                                <!-- AI Content Here -->
+                             </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 pb-12">
+                        <!-- SEO & Metadata -->
+                        <div class="glass-card p-6">
+                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">SEO & Core Metadata</h4>
+                            <div class="space-y-3">
+                                <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div class="text-[9px] font-bold text-slate-400 uppercase">Page Title</div>
+                                    <div class="text-xs font-black text-slate-800">${data.seo?.title || 'No Title Found'}</div>
+                                </div>
+                                <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div class="text-[9px] font-bold text-slate-400 uppercase">Description</div>
+                                    <p class="text-[11px] font-medium text-slate-600 line-clamp-2">${data.seo?.description || 'Missing meta description'}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- API Mapping -->
+                        <div class="glass-card p-6">
+                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Endpoints & Network (XHR/Fetch)</h4>
+                            <div class="space-y-2 max-h-64 overflow-y-auto custom-scroll pr-2">
+                                ${Array.isArray(data.endpoints) && data.endpoints.length > 0 ? data.endpoints.map(e => `
+                                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group">
+                                        <div class="flex items-center gap-2 overflow-hidden">
+                                            <span class="text-[9px] font-black px-1.5 py-0.5 rounded ${e.status >= 400 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}">${e.method || 'GET'}</span>
+                                            <span class="text-[11px] font-bold font-mono text-slate-600 truncate">${e.url}</span>
+                                            ${copyBtn(e.url)}
+                                        </div>
+                                        <span class="text-[9px] font-bold text-slate-400 flex-shrink-0">${e.status}</span>
+                                    </div>
+                                `).join('') : '<p class="text-[11px] text-slate-400 italic text-center py-4">No active API calls detected.</p>'}
+                            </div>
+                        </div>
+
+                        <!-- Categorized Assets -->
+                        <div class="glass-card p-6 border-l-4 border-blue-500">
+                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Static Assets Discovery</h4>
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div class="p-3 bg-blue-50 rounded-xl">
+                                    <div class="font-black text-blue-600 text-lg">${data.assets?.scripts?.length || 0}</div>
+                                    <div class="text-[9px] font-bold text-blue-400 uppercase">JS Scripts</div>
+                                </div>
+                                <div class="p-3 bg-purple-50 rounded-xl">
+                                    <div class="font-black text-purple-600 text-lg">${data.assets?.styles?.length || 0}</div>
+                                    <div class="text-[9px] font-bold text-purple-400 uppercase">CSS Styles</div>
+                                </div>
+                            </div>
+                            <div class="max-h-40 overflow-y-auto custom-scroll pr-2 space-y-1">
+                                ${Array.isArray(data.full_links) ? data.full_links.map(l => `
+                                    <div class="flex items-center text-[10px] font-bold text-slate-500 truncate group">
+                                        <i class="fas fa-link mr-2 text-slate-300"></i>
+                                        <span class="truncate">${l}</span>
+                                        ${copyBtn(l)}
+                                    </div>
+                                `).join('') : ''}
+                            </div>
+                        </div>
+
+                        <!-- Technical Vitals -->
+                        <div class="glass-card p-6 bg-slate-50 border-dashed border-2 border-slate-200">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Security Headers</h4>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between items-center text-[11px]">
+                                            <span class="text-slate-500">HSTS</span>
+                                            <span class="font-black ${data.tech?.headers?.hsts !== 'Missing' ? 'text-emerald-500' : 'text-red-500'} text-[9px] truncate ml-2">${data.tech?.headers?.hsts || 'Missing'}</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-[11px]">
+                                            <span class="text-slate-500">X-Frame</span>
+                                            <span class="font-black ${data.tech?.headers?.xFrame !== 'Missing' ? 'text-emerald-500' : 'text-red-500'} text-[9px] truncate ml-2">${data.tech?.headers?.xFrame || 'Missing'}</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-[11px]">
+                                            <span class="text-slate-500">Server</span>
+                                            <span class="font-black text-slate-400 text-[9px] truncate ml-2">${data.tech?.headers?.server || 'Protected'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Health Check</h4>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between items-center text-[11px]">
+                                            <span class="text-slate-500">HTTPS / SSL</span>
+                                            <span class="font-black ${data.tech?.hasHttps ? 'text-emerald-500' : 'text-red-500'} text-[9px]">${data.tech?.hasHttps ? 'ACTIVE' : 'FAIL'}</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-[11px]">
+                                            <span class="text-slate-500">CSP Shield</span>
+                                            <span class="font-black ${data.tech?.hasCsp ? 'text-emerald-500' : 'text-red-500'} text-[9px]">${data.tech?.hasCsp ? 'ACTIVE' : 'MISSING'}</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-[11px]">
+                                            <span class="text-slate-500">Cookies</span>
+                                            <span class="font-black text-slate-800 text-[9px]">${data.tech?.cookies || 0} Registered</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Deep Discovery Section -->
+                        <div class="glass-card p-6 border-l-4 border-amber-500">
+                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Deep Discovery Hub</h4>
+                            <div class="space-y-4">
+                                <div>
+                                    <div class="text-[9px] font-bold text-slate-400 uppercase mb-2">Tech Stack Detected</div>
+                                    <div class="flex flex-wrap gap-2">
+                                        ${Array.isArray(data.tech?.techStack) && data.tech.techStack.length > 0 ?
+                        data.tech.techStack.map(t => `<span class="px-2 py-1 bg-amber-50 text-amber-700 rounded-lg text-[10px] font-black border border-amber-100">${t}</span>`).join('') :
+                        '<span class="text-[10px] text-slate-400 italic">No specific frameworks identified</span>'}
+                                    </div>
+                                </div>
+                                <div class="p-4 bg-slate-900 rounded-2xl">
+                                    <div class="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-2 flex items-center justify-between">
+                                        <span>Robots.txt Analysis</span>
+                                        <i class="fas fa-robot"></i>
+                                    </div>
+                                    <pre class="text-[9px] text-slate-300 font-mono overflow-x-auto custom-scroll max-h-32">${data.discovery?.robots || 'Scanning...'}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                         <!-- Performance Vitals -->
+                        <div class="glass-card p-6">
+                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Performance Vitals</h4>
+                            <div class="grid grid-cols-3 gap-2">
+                                <div class="p-2 bg-slate-50 rounded-lg text-center">
+                                    <div class="text-[9px] font-bold text-slate-400 uppercase">Load Time</div>
+                                    <div class="text-xs font-black text-slate-800">${data.performance?.timing ? (data.performance.timing.loadEventEnd - data.performance.timing.navigationStart) + 'ms' : 'N/A'}</div>
+                                </div>
+                                <div class="p-2 bg-slate-50 rounded-lg text-center">
+                                    <div class="text-[9px] font-bold text-slate-400 uppercase">DOM Ready</div>
+                                    <div class="text-xs font-black text-slate-800">${data.performance?.timing ? (data.performance.timing.domContentLoadedEventEnd - data.performance.timing.navigationStart) + 'ms' : 'N/A'}</div>
+                                </div>
+                                <div class="p-3 bg-slate-50 rounded-lg text-center">
+                                    <div class="text-[9px] font-bold text-slate-400 uppercase">Heap Usage</div>
+                                    <div class="text-xs font-black text-slate-800">${data.performance?.memory?.usedJSHeapSize ? Math.round(data.performance.memory.usedJSHeapSize / 1024 / 1024) + 'MB' : 'N/A'}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SSL/TLS Certificate Info -->
+                        ${data.security_audit?.ssl_info ? `
+                        <div class="glass-card p-0 overflow-hidden border-2 ${data.security_audit.ssl_info.valid ? 'border-emerald-500' : 'border-red-500'}">
+                            <div class="bg-gradient-to-r ${data.security_audit.ssl_info.valid ? 'from-emerald-500 to-emerald-600' : 'from-red-500 to-red-600'} p-4 flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                                        <i class="fas fa-${data.security_audit.ssl_info.valid ? 'lock' : 'lock-open'} text-2xl text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-black text-white">SSL/TLS Certificate</h4>
+                                        <p class="text-[10px] text-white/80 font-bold uppercase tracking-wider">
+                                            ${data.security_audit.ssl_info.valid ? 'Secure Connection' : 'Security Issue Detected'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-2xl font-black text-white">${data.security_audit.ssl_info.daysRemaining > 0 ? data.security_audit.ssl_info.daysRemaining : 'N/A'}</div>
+                                    <div class="text-[9px] text-white/80 font-bold uppercase">Days Remaining</div>
+                                </div>
+                            </div>
+                            <div class="p-6 bg-white space-y-3">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <div class="text-[9px] font-bold text-slate-400 uppercase mb-1">Issuer</div>
+                                        <div class="text-xs font-bold text-slate-800">${data.security_audit.ssl_info.issuer}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[9px] font-bold text-slate-400 uppercase mb-1">Protocol</div>
+                                        <div class="text-xs font-bold text-slate-800">${data.security_audit.ssl_info.protocol || 'N/A'}</div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <div class="text-[9px] font-bold text-slate-400 uppercase mb-1">Valid From</div>
+                                        <div class="text-[10px] font-mono text-slate-600">${data.security_audit.ssl_info.validFrom}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[9px] font-bold text-slate-400 uppercase mb-1">Valid To</div>
+                                        <div class="text-[10px] font-mono text-slate-600">${data.security_audit.ssl_info.validTo}</div>
+                                    </div>
+                                </div>
+                                ${data.security_audit.ssl_info.cipher ? `
+                                <div>
+                                    <div class="text-[9px] font-bold text-slate-400 uppercase mb-1">Cipher Suite</div>
+                                    <div class="text-[10px] font-mono text-slate-600 bg-slate-50 p-2 rounded">${data.security_audit.ssl_info.cipher}</div>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        <!-- RED TEAM OPS: PENTEST RESULTS -->
+                        <div class="glass-card p-0 overflow-hidden border-2 border-red-500/50 shadow-xl">
+                            <div class="bg-slate-900 p-4 border-b border-red-500/20 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                    <h4 class="text-xs font-black text-red-500 uppercase tracking-widest">Red Team Ops :: Active Recon</h4>
+                                </div>
+                                <span class="text-[9px] font-mono text-slate-500">MODULE_ID: HUNTER_V1</span>
+                            </div>
+                            
+                            <div class="p-6 space-y-6 bg-slate-50/50">
+                                <!-- 1. EXPOSED FILES -->
+                                <div>
+                                    <h5 class="flex items-center gap-2 text-[10px] font-black text-slate-700 uppercase mb-3">
+                                        <i class="fas fa-folder-open text-red-500"></i> Sensitive Files Probe
+                                    </h5>
+                                    <div class="space-y-2">
+                                        ${data.security_audit?.exposed_files?.length > 0 ?
+                        data.security_audit.exposed_files.map(f => {
+                            const severityColors = {
+                                'CRITICAL': 'bg-red-600 text-white',
+                                'HIGH': 'bg-orange-500 text-white',
+                                'MEDIUM': 'bg-yellow-500 text-white',
+                                'LOW': 'bg-blue-500 text-white',
+                                'INFO': 'bg-slate-400 text-white'
+                            };
+                            const severity = f.severity || 'MEDIUM';
+                            const colorClass = severityColors[severity] || 'bg-slate-500 text-white';
+
+                            return `
+                                                <div class="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
+                                                    <div class="flex items-center gap-3">
+                                                        <i class="fas fa-exclamation-triangle text-red-500 text-xs"></i>
+                                                        <div>
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="text-xs font-bold text-red-900">${f.file}</span>
+                                                                <span class="px-1.5 py-0.5 rounded text-[8px] font-black ${colorClass}">${severity}</span>
+                                                            </div>
+                                                            <div class="text-[9px] text-red-700 font-mono">Status: ${f.status} OK</div>
+                                                        </div>
+                                                    </div>
+                                                    <a href="${f.url}" target="_blank" class="px-2 py-1 bg-white rounded text-[9px] font-bold text-red-500 border border-red-100 hover:bg-red-500 hover:text-white transition-colors">
+                                                        VERIFY
+                                                    </a>
+                                                </div>
+                                            `;
+                        }).join('') :
+                        '<div class="p-3 bg-emerald-50 border border-emerald-100 rounded-lg text-[10px] font-bold text-emerald-600 flex items-center gap-2"><i class="fas fa-check-circle"></i> Nenhum arquivo sensível exposto detectado.</div>'
+                    }
+                                    </div>
+                                </div>
+
+                                <!-- 2. LEAKED SECRETS (ENHANCED) -->
+                                <div>
+                                    <h5 class="flex items-center gap-2 text-[10px] font-black text-slate-700 uppercase mb-3">
+                                        <i class="fas fa-key text-orange-500"></i> Secret Leak Intelligence (Deep Scan)
+                                    </h5>
+                                    <div class="grid gap-2">
+                                        ${data.security_audit?.leaked_secrets?.length > 0 ?
+                        data.security_audit.leaked_secrets.map(s => `
+                                                <div class="p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-center justify-between">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="w-8 h-8 rounded bg-orange-100 flex items-center justify-center text-orange-500">
+                                                            <i class="fas fa-bug"></i>
+                                                        </div>
+                                                        <div>
+                                                            <div class="text-[10px] font-black text-orange-900 uppercase">${s.type}</div>
+                                                            <div class="text-[9px] font-mono text-slate-500">Source: ${s.source}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="px-2 py-1 bg-white border border-orange-100 rounded text-[9px] font-mono text-slate-600 truncate max-w-[100px]">
+                                                        ${s.snippet}
+                                                    </div>
+                                                </div>
+                                            `).join('') :
+                        '<div class="w-full p-3 bg-emerald-50 border border-emerald-100 rounded-lg text-[10px] font-bold text-emerald-600 flex items-center gap-2"><i class="fas fa-shield-halved"></i> Nenhum segredo/chave detectado no código (HTML/JS).</div>'
+                    }
+                                    </div>
+                                </div>
+
+                                <!-- 3. ATTACK VECTORS -->
+                                <div>
+                                    <h5 class="flex items-center gap-2 text-[10px] font-black text-slate-700 uppercase mb-3">
+                                        <i class="fas fa-crosshairs text-slate-800"></i> Attack Vector Mapping
+                                    </h5>
+                                    <div class="grid md:grid-cols-2 gap-4">
+                                        <div class="p-3 bg-slate-100 rounded-xl">
+                                            <div class="text-[9px] font-bold text-slate-400 uppercase mb-2">Injection Entry Points (Forms)</div>
+                                            <div class="text-2xl font-black text-slate-800">${data.security_audit?.attack_vectors?.forms?.length || 0}</div>
+                                            <div class="mt-2 space-y-1">
+                                                ${data.security_audit?.attack_vectors?.forms?.slice(0, 3).map(f => `
+                                                    <div class="text-[9px] font-mono text-slate-600 truncate bg-white px-2 py-1 rounded border border-slate-200">
+                                                        <span class="font-bold text-blue-600">${f.method}</span> ${f.action || 'self'}
+                                                    </div>
+                                                `).join('') || ''}
+                                            </div>
+                                        </div>
+                                        <div class="p-3 bg-slate-100 rounded-xl">
+                                            <div class="text-[9px] font-bold text-slate-400 uppercase mb-2">URL Parameters (Reflected XSS)</div>
+                                            <div class="text-2xl font-black text-slate-800">${data.security_audit?.attack_vectors?.url_parameters?.length || 0}</div>
+                                            <div class="flex flex-wrap gap-1 mt-2">
+                                                 ${data.security_audit?.attack_vectors?.url_parameters?.map(p => `
+                                                    <span class="px-1.5 py-0.5 bg-white text-slate-600 font-mono text-[9px] rounded border border-slate-200">${p}</span>
+                                                `).join('') || '<span class="text-[9px] text-slate-400 italic">No params</span>'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 4. GHOST PROTOCOL & VISUAL INTEL -->
+                                <div class="grid md:grid-cols-2 gap-6 pt-4 border-t border-red-500/10">
+                                    <!-- Ghost Routes -->
+                                    <div>
+                                        <h5 class="flex items-center gap-2 text-[10px] font-black text-slate-700 uppercase mb-3">
+                                            <i class="fas fa-ghost text-purple-600"></i> Ghost Protocol (Hidden API Map)
+                                        </h5>
+                                        <div class="bg-slate-900 rounded-xl p-3 h-48 overflow-y-auto custom-scroll border border-purple-500/20">
+                                            ${data.security_audit?.ghost_routes?.length > 0 ?
+                        `<div class="space-y-1">
+                                                    ${data.security_audit.ghost_routes.map(r => {
+                            const route = typeof r === 'string' ? r : r.route;
+                            const status = typeof r === 'object' ? r.status : 'unknown';
+                            const validated = typeof r === 'object' ? r.validated : false;
+                            const statusColor = status === 200 ? 'text-emerald-400' : status === 404 ? 'text-red-400' : 'text-purple-400';
+                            const icon = validated ? 'fa-check-circle' : 'fa-link';
+
+                            return `
+                                                        <div class="text-[10px] font-mono ${statusColor} flex items-center gap-2">
+                                                            <i class="fas ${icon} text-[8px] opacity-50"></i> 
+                                                            <span>${route}</span>
+                                                            ${typeof r === 'object' && r.status !== 'unknown' ? `<span class="text-[8px] opacity-70">(${r.status})</span>` : ''}
+                                                        </div>
+                                                        `;
+                        }).join('')}
+                                                </div>` :
+                        '<div class="text-[10px] text-slate-500 italic text-center mt-10">No hidden routes discovered via JS analysis.</div>'
+                    }
+                                        </div>
+                                    </div>
+
+                                    <!-- Visual Intel -->
+                                    <div>
+                                        <h5 class="flex items-center gap-2 text-[10px] font-black text-slate-700 uppercase mb-3">
+                                            <i class="fas fa-eye text-emerald-600"></i> Visual Recon (Computer Vision)
+                                        </h5>
+                                        <div class="relative group rounded-xl overflow-hidden border border-emerald-500/20 shadow-lg bg-slate-900 h-48 flex items-center justify-center">
+                                            ${data.screenshot ?
+                        `<img src="data:image/jpeg;base64,${data.screenshot}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="Target Screenshot">
+                                                 <div class="absolute inset-x-0 bottom-0 bg-black/80 p-2 text-center">
+                                                    <span class="text-[9px] font-bold text-white uppercase tracking-wider">Analyzed by Gemini Vision</span>
+                                                 </div>` :
+                        '<div class="text-slate-500 flex flex-col items-center"><i class="fas fa-video-slash text-2xl mb-2"></i><span class="text-[10px]">NO VISUAL DATA</span></div>'
+                    }
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 5. DEEP NAV: SITE MAP & SCREENSHOTS -->
+                                <div class="pt-6 border-t border-slate-200/10">
+                                    <h5 class="flex items-center gap-2 text-[10px] font-black text-slate-700 uppercase mb-4">
+                                        <i class="fas fa-sitemap text-blue-500"></i> Deep Navigation Mapping (Auto-Crawling)
+                                    </h5>
+                                    
+                                    ${data.site_map?.nodes?.length > 0 ? `
+                                        <div class="grid md:grid-cols-3 gap-4">
+                                            ${data.site_map.nodes.map((node, i) => `
+                                                <div class="group relative bg-slate-100 rounded-xl overflow-hidden border border-slate-200 hover:border-blue-500 hover:shadow-lg transition-all">
+                                                    <div class="h-32 bg-slate-200 relative overflow-hidden">
+                                                        ${node.screenshot ?
+                            `<img src="data:image/jpeg;base64,${node.screenshot}" class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500">` :
+                            '<div class="flex items-center justify-center h-full text-slate-400"><i class="fas fa-image text-2xl"></i></div>'
+                        }
+                                                        <div class="absolute top-2 right-2 px-2 py-1 bg-black/70 text-white rounded text-[8px] font-black uppercase">
+                                                            ${node.type}
+                                                        </div>
+                                                    </div>
+                                                    <div class="p-3">
+                                                        <div class="text-[10px] font-bold text-slate-800 truncate mb-1" title="${node.title}">${node.title}</div>
+                                                        <div class="text-[9px] font-mono text-slate-500 truncate text-blue-600 hover:underline cursor-pointer" onclick="window.open('${node.url}', '_blank')">
+                                                            ${node.url}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    ` : `
+                                        <div class="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                                            <p class="text-xs text-slate-500 font-bold uppercase tracking-widest">Nenhuma sub-página mapeada automaticamente.</p>
+                                        </div>
+                                    `}
+                                </div>
+
+                                <!-- 6. ACTIVE VULNERABILITY TESTING (NEW!) -->
+                                ${data.security_audit?.vulnerabilities?.total > 0 ? `
+                                <div class="pt-6 border-t-4 border-red-600">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <h5 class="flex items-center gap-2 text-[10px] font-black text-red-700 uppercase">
+                                            <i class="fas fa-bug text-red-600 animate-pulse"></i> Active Vulnerability Testing (CRITICAL)
+                                        </h5>
+                                        <div class="flex gap-2">
+                                            <span class="px-2 py-1 bg-red-600 text-white rounded text-[8px] font-black">
+                                                ${data.security_audit.vulnerabilities.critical} CRITICAL
+                                            </span>
+                                            <span class="px-2 py-1 bg-orange-500 text-white rounded text-[8px] font-black">
+                                                ${data.security_audit.vulnerabilities.high} HIGH
+                                            </span>
+                                            <span class="px-2 py-1 bg-yellow-500 text-white rounded text-[8px] font-black">
+                                                ${data.security_audit.vulnerabilities.medium} MEDIUM
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- XSS Vulnerabilities -->
+                                    ${data.security_audit.vulnerabilities.xss.length > 0 ? `
+                                    <div class="mb-4">
+                                        <h6 class="text-[9px] font-black text-red-600 uppercase mb-2 flex items-center gap-2">
+                                            <i class="fas fa-code"></i> Cross-Site Scripting (XSS) - ${data.security_audit.vulnerabilities.xss.length} Found
+                                        </h6>
+                                        <div class="space-y-2">
+                                            ${data.security_audit.vulnerabilities.xss.map(v => `
+                                                <div class="p-4 bg-red-50 border-l-4 border-red-600 rounded-r-lg">
+                                                    <div class="flex items-start justify-between mb-2">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="px-2 py-0.5 rounded text-[8px] font-black ${v.severity === 'CRITICAL' ? 'bg-red-600' : 'bg-orange-500'} text-white">
+                                                                ${v.severity}
+                                                            </span>
+                                                            <span class="text-[10px] font-bold text-red-900">${v.type}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="space-y-1 text-[9px]">
+                                                        <div><span class="font-bold text-slate-600">Location:</span> <span class="font-mono text-slate-700">${v.location}</span></div>
+                                                        <div><span class="font-bold text-slate-600">Payload:</span> <code class="bg-slate-900 text-emerald-400 px-2 py-0.5 rounded">${v.payload}</code></div>
+                                                        <div><span class="font-bold text-slate-600">Type:</span> <span class="text-slate-700">${v.payloadType}</span></div>
+                                                        <div class="pt-2 border-t border-red-200">
+                                                            <span class="font-bold text-red-700">Impact:</span> <span class="text-slate-700">${v.impact}</span>
+                                                        </div>
+                                                        <div class="pt-1">
+                                                            <span class="font-bold text-emerald-700">Fix:</span> <span class="text-slate-700">${v.recommendation}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    ` : ''}
+
+                                    <!-- SQL Injection Vulnerabilities -->
+                                    ${data.security_audit.vulnerabilities.sqli.length > 0 ? `
+                                    <div class="mb-4">
+                                        <h6 class="text-[9px] font-black text-red-600 uppercase mb-2 flex items-center gap-2">
+                                            <i class="fas fa-database"></i> SQL Injection - ${data.security_audit.vulnerabilities.sqli.length} Found
+                                        </h6>
+                                        <div class="space-y-2">
+                                            ${data.security_audit.vulnerabilities.sqli.map(v => `
+                                                <div class="p-4 bg-red-50 border-l-4 border-red-700 rounded-r-lg">
+                                                    <div class="flex items-start justify-between mb-2">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="px-2 py-0.5 rounded text-[8px] font-black bg-red-700 text-white">
+                                                                ${v.severity}
+                                                            </span>
+                                                            <span class="text-[10px] font-bold text-red-900">${v.type}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="space-y-1 text-[9px]">
+                                                        <div><span class="font-bold text-slate-600">Location:</span> <span class="font-mono text-slate-700">${v.location}</span></div>
+                                                        <div><span class="font-bold text-slate-600">Payload:</span> <code class="bg-slate-900 text-red-400 px-2 py-0.5 rounded">${v.payload}</code></div>
+                                                        <div><span class="font-bold text-slate-600">Type:</span> <span class="text-slate-700">${v.payloadType}</span></div>
+                                                        <div><span class="font-bold text-slate-600">Evidence:</span> <span class="text-slate-700">${v.evidence}</span></div>
+                                                        <div class="pt-2 border-t border-red-200">
+                                                            <span class="font-bold text-red-700">Impact:</span> <span class="text-slate-700">${v.impact}</span>
+                                                        </div>
+                                                        <div class="pt-1">
+                                                            <span class="font-bold text-emerald-700">Fix:</span> <span class="text-slate-700">${v.recommendation}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    ` : ''}
+
+                                    <!-- Authentication Vulnerabilities -->
+                                    ${data.security_audit.vulnerabilities.auth.length > 0 ? `
+                                    <div class="mb-4">
+                                        <h6 class="text-[9px] font-black text-orange-600 uppercase mb-2 flex items-center gap-2">
+                                            <i class="fas fa-lock-open"></i> Authentication Issues - ${data.security_audit.vulnerabilities.auth.length} Found
+                                        </h6>
+                                        <div class="space-y-2">
+                                            ${data.security_audit.vulnerabilities.auth.map(v => `
+                                                <div class="p-4 bg-orange-50 border-l-4 ${v.severity === 'CRITICAL' ? 'border-red-600' : v.severity === 'HIGH' ? 'border-orange-500' : 'border-yellow-500'} rounded-r-lg">
+                                                    <div class="flex items-start justify-between mb-2">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="px-2 py-0.5 rounded text-[8px] font-black ${v.severity === 'CRITICAL' ? 'bg-red-600' : v.severity === 'HIGH' ? 'bg-orange-500' : 'bg-yellow-500'} text-white">
+                                                                ${v.severity}
+                                                            </span>
+                                                            <span class="text-[10px] font-bold text-orange-900">${v.type}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="space-y-1 text-[9px]">
+                                                        <div><span class="font-bold text-slate-600">Location:</span> <span class="font-mono text-slate-700">${v.location}</span></div>
+                                                        ${v.credentials ? `<div><span class="font-bold text-slate-600">Credentials:</span> <code class="bg-slate-900 text-yellow-400 px-2 py-0.5 rounded">${v.credentials}</code></div>` : ''}
+                                                        ${v.attempts ? `<div><span class="font-bold text-slate-600">Attempts:</span> <span class="text-slate-700">${v.attempts} without blocking</span></div>` : ''}
+                                                        <div><span class="font-bold text-slate-600">Evidence:</span> <span class="text-slate-700">${v.evidence}</span></div>
+                                                        <div class="pt-2 border-t border-orange-200">
+                                                            <span class="font-bold text-orange-700">Impact:</span> <span class="text-slate-700">${v.impact}</span>
+                                                        </div>
+                                                        <div class="pt-1">
+                                                            <span class="font-bold text-emerald-700">Fix:</span> <span class="text-slate-700">${v.recommendation}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    ` : ''}
+
+                                    <!-- SSL/TLS Vulnerabilities -->
+                                    ${data.security_audit.vulnerabilities.ssl && data.security_audit.vulnerabilities.ssl.length > 0 ? `
+                                    <div class="mb-4">
+                                        <h6 class="text-[9px] font-black text-blue-600 uppercase mb-2 flex items-center gap-2">
+                                            <i class="fas fa-certificate"></i> SSL/TLS Issues - ${data.security_audit.vulnerabilities.ssl.length} Found
+                                        </h6>
+                                        <div class="space-y-2">
+                                            ${data.security_audit.vulnerabilities.ssl.map(v => `
+                                                <div class="p-4 bg-blue-50 border-l-4 ${v.severity === 'CRITICAL' ? 'border-red-600' : v.severity === 'HIGH' ? 'border-orange-500' : 'border-blue-500'} rounded-r-lg">
+                                                    <div class="flex items-start justify-between mb-2">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="px-2 py-0.5 rounded text-[8px] font-black ${v.severity === 'CRITICAL' ? 'bg-red-600' : v.severity === 'HIGH' ? 'bg-orange-500' : v.severity === 'MEDIUM' ? 'bg-yellow-500' : 'bg-blue-500'} text-white">
+                                                                ${v.severity}
+                                                            </span>
+                                                            <span class="text-[10px] font-bold text-blue-900">${v.type}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="space-y-1 text-[9px]">
+                                                        ${v.daysExpired ? `<div><span class="font-bold text-slate-600">Expired:</span> <span class="text-red-700 font-bold">${v.daysExpired} days ago</span></div>` : ''}
+                                                        ${v.daysRemaining ? `<div><span class="font-bold text-slate-600">Days Remaining:</span> <span class="text-slate-700">${v.daysRemaining} days</span></div>` : ''}
+                                                        ${v.validTo ? `<div><span class="font-bold text-slate-600">Valid Until:</span> <span class="text-slate-700">${v.validTo}</span></div>` : ''}
+                                                        ${v.issuer ? `<div><span class="font-bold text-slate-600">Issuer:</span> <span class="text-slate-700">${v.issuer}</span></div>` : ''}
+                                                        ${v.protocol ? `<div><span class="font-bold text-slate-600">Protocol:</span> <code class="bg-slate-900 text-blue-400 px-2 py-0.5 rounded">${v.protocol}</code></div>` : ''}
+                                                        ${v.cipher ? `<div><span class="font-bold text-slate-600">Cipher:</span> <code class="bg-slate-900 text-blue-400 px-2 py-0.5 rounded">${v.cipher}</code></div>` : ''}
+                                                        ${v.error ? `<div><span class="font-bold text-slate-600">Error:</span> <span class="text-slate-700">${v.error}</span></div>` : ''}
+                                                        <div class="pt-2 border-t border-blue-200">
+                                                            <span class="font-bold text-blue-700">Impact:</span> <span class="text-slate-700">${v.impact}</span>
+                                                        </div>
+                                                        <div class="pt-1">
+                                                            <span class="font-bold text-emerald-700">Fix:</span> <span class="text-slate-700">${v.recommendation}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    ` : ''}
+
+                                    <!-- Summary -->
+                                    <div class="p-4 bg-slate-900 rounded-xl text-white">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">Total Vulnerabilities Found</div>
+                                                <div class="text-3xl font-black">${data.security_audit.vulnerabilities.total}</div>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="text-[9px] text-red-400 font-bold">⚠️ IMMEDIATE ACTION REQUIRED</div>
+                                                <div class="text-[8px] text-slate-400 mt-1">These are confirmed exploitable vulnerabilities</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                ` : `
+                                <div class="pt-6 border-t border-emerald-500/20">
+                                    <div class="p-6 bg-emerald-50 border-2 border-emerald-500 rounded-xl text-center">
+                                        <i class="fas fa-shield-check text-4xl text-emerald-600 mb-3"></i>
+                                        <h6 class="text-sm font-black text-emerald-800 mb-2">No Active Vulnerabilities Detected</h6>
+                                        <p class="text-[10px] text-emerald-700">XSS, SQLi, and Authentication tests passed successfully</p>
+                                    </div>
+                                </div>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            async generateAIReport() {
+                const trigger = document.getElementById('ai-report-trigger');
+                const container = document.getElementById('ai-report-container');
+                const body = document.getElementById('ai-report-body');
+
+                if (!this.activeAudit || !this.activeAudit.id) {
+                    this.notify("Erro: ID de auditoria não encontrado.");
+                    return;
+                }
+
+                trigger.querySelector('button').disabled = true;
+                trigger.querySelector('button').innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> PROCESSANDO RELATÓRIO...`;
+
+                try {
+                    const response = await fetch(`${this.apiBase}/ai/report`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            scan_id: this.activeAudit.id,
+                            model: this.settings.model,
+                            api_key: this.settings.key
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error || "Erro ao gerar relatório AI");
+                    }
+
+                    const report = await response.json();
+
+                    trigger.classList.add('hidden');
+                    container.classList.remove('hidden');
+
+                    // Use marked.js to render markdown
+                    body.innerHTML = marked.parse(report.content);
+
+                    this.notify("Relatório Master AI gerado com sucesso!");
+
+                    // Show chat section after report is generated
+                    document.getElementById('ai-chat-section').classList.remove('hidden');
+
+                    window.scrollTo({ top: body.offsetTop - 100, behavior: 'smooth' });
+
+                } catch (err) {
+                    this.notify("Falha: " + err.message);
+                    trigger.querySelector('button').disabled = false;
+                    trigger.querySelector('button').innerHTML = `<i class="fas fa-sparkles mr-2"></i> TENTAR NOVAMENTE`;
+                }
+            }
+
+            copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    this.notify("Link copiado para a área de transferência!");
+                }).catch(err => {
+                    this.notify("Falha ao copiar link.");
+                });
+            }
+
+            async viewAudit(id) {
+                const tx = this.db.transaction("scans", "readonly");
+                const audit = await new Promise(r => {
+                    const req = tx.objectStore("scans").get(id);
+                    req.onsuccess = () => r(req.result);
+                });
+                if (audit) {
+                    // Parse metadata if it's a string (from backend)
+                    if (typeof audit.metadata === 'string') {
+                        try {
+                            const meta = JSON.parse(audit.metadata);
+                            audit.media = meta.media;
+                            audit.schema = meta.schema;
+                            audit.tech = meta.tech;
+                            audit.seo = meta.seo;
+                            audit.assets = meta.assets;
+                            audit.full_links = meta.full_links;
+                            audit.performance = meta.performance;
+                            audit.discovery = meta.discovery;
+                            audit.security_audit = meta.security_audit; // RED TEAM DATA
+                            audit.screenshot = meta.screenshot; // VISUAL INTEL
+                            audit.site_map = meta.site_map; // DEEP NAV
+                        } catch (e) {
+                            console.error('Failed to parse metadata:', e);
+                        }
+                    }
+
+                    // Parse endpoints if it's a string
+                    if (typeof audit.endpoints === 'string') {
+                        try { audit.endpoints = JSON.parse(audit.endpoints); } catch (e) { audit.endpoints = []; }
+                    }
+
+                    this.renderReport(audit);
+                    this.showScreen('report');
+
+                    // Check if AI report exists for this scan
+                    try {
+                        const response = await fetch(`${this.apiBase}/ai/report/${audit.id}`);
+                        if (response.ok) {
+                            const report = await response.json();
+                            const trigger = document.getElementById('ai-report-trigger');
+                            const container = document.getElementById('ai-report-container');
+                            const body = document.getElementById('ai-report-body');
+
+                            if (trigger && container && body) {
+                                trigger.classList.add('hidden');
+                                container.classList.remove('hidden');
+                                body.innerHTML = marked.parse(report.content);
+                                document.getElementById('ai-chat-section').classList.remove('hidden');
+                            }
+                        }
+                    } catch (e) {
+                        console.log('No AI report found for this scan');
+                    }
+                }
+            }
+
+            notify(msg) {
+                const t = document.createElement('div');
+                t.className = "fixed top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-bold z-[100] shadow-2xl animate-bounce";
+                t.innerText = msg;
+                document.body.appendChild(t);
+                setTimeout(() => t.remove(), 3000);
+            }
+
+            exportJSON() {
+                if (!this.activeAudit) return;
+                const blob = new Blob([JSON.stringify(this.activeAudit, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `aegis-scan-${Date.now()}.json`;
+                a.click();
+            }
+
+            shareReport() {
+                if (navigator.share) {
+                    navigator.share({
+                        title: 'AegisScan Report',
+                        text: `Relatório de auditoria de ${this.activeAudit.target}`,
+                        url: window.location.href
+                    });
+                } else {
+                    this.notify("Compartilhamento não suportado neste navegador.");
+                }
+            }
+
+            async sendChatMessage() {
+                const input = document.getElementById('chat-input');
+                const message = input.value.trim();
+
+                if (!message || !this.activeAudit) return;
+
+                const messagesContainer = document.getElementById('chat-messages');
+
+                // Add user message
+                this.addChatMessage('user', message);
+                input.value = '';
+                input.disabled = true;
+
+                try {
+                    const response = await fetch(`${this.apiBase}/ai/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            scan_id: this.activeAudit.id,
+                            message: message,
+                            model: this.settings.model,
+                            api_key: this.settings.key
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error || "Erro ao enviar mensagem");
+                    }
+
+                    const data = await response.json();
+                    this.addChatMessage('assistant', data.message);
+
+                } catch (err) {
+                    this.notify("Erro no chat: " + err.message);
+                    this.addChatMessage('assistant', 'Desculpe, ocorreu um erro ao processar sua mensagem.');
+                } finally {
+                    input.disabled = false;
+                    input.focus();
+                }
+            }
+
+            addChatMessage(role, content) {
+                const messagesContainer = document.getElementById('chat-messages');
+                const messageDiv = document.createElement('div');
+
+                if (role === 'user') {
+                    messageDiv.className = 'flex justify-end';
+                    messageDiv.innerHTML = `
+                        <div class="bg-blue-500 text-white px-4 py-3 rounded-2xl rounded-tr-sm max-w-[80%]">
+                            <p class="text-xs font-medium">${content}</p>
+                        </div>
+                    `;
+                } else {
+                    messageDiv.className = 'flex justify-start';
+                    messageDiv.innerHTML = `
+                        <div class="bg-slate-100 text-slate-800 px-4 py-3 rounded-2xl rounded-tl-sm max-w-[80%]">
+                            <div class="text-xs prose prose-sm">${marked.parse(content)}</div>
+                        </div>
+                    `;
+                }
+
+                messagesContainer.appendChild(messageDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            toggleAssetsExplorer() {
+                const modal = document.getElementById('assets-explorer-modal');
+                if (modal.classList.contains('hidden')) {
+                    modal.classList.remove('hidden');
+                    this.renderAssetsExplorer();
+                } else {
+                    modal.classList.add('hidden');
+                }
+            }
+
+            switchAssetTab(tabName) {
+                // Update tabs buttons
+                document.querySelectorAll('.asset-tab').forEach(t => {
+                    t.classList.remove('text-emerald-400', 'border-emerald-500');
+                    t.classList.add('text-slate-300', 'border-transparent');
+                });
+                const activeTab = document.getElementById(`tab-${tabName}`);
+                if (activeTab) {
+                    activeTab.classList.remove('text-slate-300', 'border-transparent');
+                    activeTab.classList.add('text-emerald-400', 'border-emerald-500');
+                }
+
+                // Show panels
+                document.querySelectorAll('.asset-panel').forEach(p => p.classList.add('hidden'));
+                const targetPanel = document.getElementById(`panel-${tabName}`);
+                if (targetPanel) targetPanel.classList.remove('hidden');
+            }
+
+            renderAssetsExplorer() {
+                this.switchAssetTab('videos'); // Default tab
+
+                if (!this.activeAudit) return;
+                const data = this.activeAudit;
+
+                // --- 1. RENDER VIDEOS ---
+                const videoPanel = document.getElementById('panel-videos');
+                const streams = data.media?.streams || [];
+                const playerEngine = data.media?.player || 'Unknown';
+
+                if (streams.length === 0) {
+                    videoPanel.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-64 text-slate-500">
+                            <i class="fas fa-video-slash text-4xl mb-4 opacity-50"></i>
+                            <p class="text-xs uppercase tracking-widest font-bold">Nenhum stream de vídeo detectado</p>
+                        </div>
+                    `;
+                } else {
+                    videoPanel.innerHTML = `
+                        <div class="p-4 bg-emerald-900/20 border border-emerald-500/20 rounded-xl mb-6">
+                            <div class="text-[10px] font-bold text-emerald-500 uppercase mb-1">Player Engine Detected</div>
+                            <div class="text-lg font-bold text-white">${playerEngine}</div>
+                        </div>
+                        <div class="grid gap-6">
+                            ${streams.map((stream, idx) => `
+                                <div class="bg-slate-800/50 rounded-2xl overflow-hidden border border-white/5">
+                                    <div class="p-3 bg-slate-900/50 flex items-center justify-between border-b border-white/5">
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-2 py-1 rounded text-[9px] font-black uppercase ${stream.url.includes('.m3u8') ? 'bg-orange-500/20 text-orange-400' :
+                            stream.url.includes('.mpd') ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'
+                        }">${stream.type || 'VIDEO'}</span>
+                                            <span class="text-[10px] font-mono text-slate-400 truncate max-w-[200px]">${stream.url}</span>
+                                        </div>
+                                        <button onclick="app.copyToClipboard('${stream.url}')" class="text-slate-400 hover:text-white transition-colors">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                    <div class="aspect-video bg-black relative group">
+                                         ${stream.url.includes('.mp4') || stream.url.includes('.m3u8') ? `
+                                            <video id="video-${idx}" controls class="w-full h-full" data-stream="${stream.url}"></video>
+                                        ` : `
+                                            <div class="absolute inset-0 flex items-center justify-center">
+                                                <a href="${stream.url}" target="_blank" class="px-6 py-3 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl text-white font-bold text-xs transition-all flex items-center gap-2">
+                                                    <i class="fas fa-external-link-alt"></i> Abrir Stream Externo
+                                                </a>
+                                            </div>
+                                        `}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+
+                    // Initialize HLS
+                    setTimeout(() => {
+                        streams.forEach((stream, idx) => {
+                            if (stream.url.includes('.m3u8')) {
+                                const video = document.getElementById(`video-${idx}`);
+                                if (video && Hls.isSupported()) {
+                                    const hls = new Hls();
+                                    hls.loadSource(stream.url);
+                                    hls.attachMedia(video);
+                                } else if (video && video.canPlayType('application/vnd.apple.mpegurl')) {
+                                    video.src = stream.url;
+                                }
+                            } else if (stream.url.includes('.mp4')) {
+                                const video = document.getElementById(`video-${idx}`);
+                                if (video) video.src = stream.url;
+                            }
+                        });
+                    }, 500);
+                }
+
+                // --- 2. RENDER IMAGES ---
+                const imagePanel = document.getElementById('image-grid');
+                // Merge static assets images and dom images
+                const netImages = (data.assets?.images || []).map(i => i.url);
+                const domImages = (data.dom_images || []).map(i => i.src);
+                const uniqueImages = [...new Set([...netImages, ...domImages])];
+
+                if (uniqueImages.length === 0) {
+                    imagePanel.innerHTML = `
+                        <div class="col-span-full flex flex-col items-center justify-center h-64 text-slate-500">
+                            <i class="fas fa-image text-4xl mb-4 opacity-50"></i>
+                            <p class="text-xs uppercase tracking-widest font-bold">Nenhuma imagem detectada</p>
+                        </div>
+                    `;
+                } else {
+                    imagePanel.innerHTML = uniqueImages.map(imgUrl => `
+                        <div class="group relative aspect-square bg-slate-800 rounded-xl overflow-hidden border border-white/5">
+                            <div class="absolute inset-0 bg-slate-900 flex items-center justify-center">
+                                <i class="fas fa-image text-slate-700 text-2xl"></i>
+                            </div>
+                            <img src="${imgUrl}" 
+                                 loading="lazy" 
+                                 class="absolute inset-0 w-full h-full object-cover transition-opacity duration-300" 
+                                 onload="this.parentElement.querySelector('.bg-slate-900').style.display='none'"
+                                 onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'flex items-center justify-center h-full text-xs text-slate-500 bg-slate-900\\'>Broken</div>'">
+                            
+                            <!-- Overlay Actions -->
+                            <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                                <button onclick="window.open('${imgUrl}', '_blank')" class="px-4 py-2 bg-white text-slate-900 rounded-lg text-xs font-bold hover:bg-emerald-400 transition-colors">
+                                    View Full
+                                </button>
+                                <button onclick="app.copyToClipboard('${imgUrl}')" class="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors">
+                                    Copy Link
+                                </button>
+                            </div>
+                            <div class="absolute bottom-0 left-0 right-0 p-2 bg-black/80 text-[9px] text-slate-300 truncate font-mono">
+                                ${imgUrl.split('/').pop().split('?')[0]}
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                // --- 3. RENDER DOCS & FONTS ---
+                const docsPanel = document.getElementById('panel-docs');
+                const docs = data.assets?.documents || [];
+                const fonts = data.assets?.fonts || [];
+
+                if (docs.length === 0 && fonts.length === 0) {
+                    docsPanel.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-64 text-slate-500">
+                            <i class="fas fa-folder-open text-4xl mb-4 opacity-50"></i>
+                            <p class="text-xs uppercase tracking-widest font-bold">Nenhum documento ou fonte encontrado</p>
+                        </div>
+                    `;
+                } else {
+                    let html = '';
+
+                    if (docs.length > 0) {
+                        html += `
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 mt-2">Documentos (${docs.length})</h4>
+                            <div class="grid gap-2">
+                                ${docs.map(doc => `
+                                    <div class="flex items-center justify-between p-3 bg-slate-800/50 rounded-xl border border-white/5 hover:border-emerald-500/30 transition-colors">
+                                        <div class="flex items-center gap-3 overflow-hidden">
+                                            <div class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
+                                                <i class="fas fa-file-${doc.type === 'PDF' ? 'pdf' : 'lines'}"></i>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <div class="text-xs font-bold text-slate-200 truncate">${doc.url.split('/').pop()}</div>
+                                                <div class="text-[9px] text-slate-500 uppercase font-bold">${doc.type} FILES</div>
+                                            </div>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button onclick="app.copyToClipboard('${doc.url}')" class="p-2 text-slate-400 hover:text-white transition-colors">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                            <a href="${doc.url}" target="_blank" class="p-2 text-blue-400 hover:text-blue-300 transition-colors">
+                                                <i class="fas fa-download"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+
+                    if (fonts.length > 0) {
+                        html += `
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 mt-8">Fontes Detectadas (${fonts.length})</h4>
+                            <div class="grid gap-2">
+                                ${fonts.map(font => `
+                                    <div class="flex items-center justify-between p-3 bg-slate-800/50 rounded-xl border border-white/5">
+                                        <div class="flex items-center gap-3 overflow-hidden">
+                                            <div class="w-8 h-8 rounded-lg bg-slate-700 text-slate-400 flex items-center justify-center flex-shrink-0">
+                                                <i class="fas fa-font"></i>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <div class="text-xs font-mono text-slate-300 truncate">${font.split('/').pop()}</div>
+                                            </div>
+                                        </div>
+                                        <button onclick="app.copyToClipboard('${font}')" class="text-slate-400 hover:text-white transition-colors">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+
+                    docsPanel.innerHTML = html;
+                }
+            }
+
+            async downloadPDF() {
+                if (!this.activeAudit || !this.activeAudit.id) {
+                    this.notify("Nenhum relatório ativo para exportar");
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.apiBase}/pdf/${this.activeAudit.id}`);
+                    if (!response.ok) throw new Error("Erro ao gerar PDF");
+
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `aegis-report-${this.activeAudit.id}.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+
+                    this.notify("PDF baixado com sucesso!");
+                } catch (err) {
+                    this.notify("Erro ao gerar PDF: " + err.message);
+                }
+            }
+
+            async loadDashboardStats() {
+                try {
+                    const response = await fetch(`${this.apiBase}/dashboard/stats`);
+                    if (!response.ok) return;
+
+                    const stats = await response.json();
+
+                    if (stats.total_scans > 0) {
+                        document.getElementById('analytics-dashboard').classList.remove('hidden');
+                        document.getElementById('avg-score').innerText = stats.avg_score;
+                        document.getElementById('total-endpoints').innerText = stats.total_endpoints;
+                        document.getElementById('scan-count').innerText = stats.total_scans;
+
+                        // Render chart
+                        this.renderScoreTrendChart(stats.score_trend);
+                    }
+                } catch (e) {
+                    console.log('Dashboard stats not available');
+                }
+            }
+
+            renderScoreTrendChart(scoreTrend) {
+                const canvas = document.getElementById('score-trend-chart');
+                if (!canvas) return;
+
+                const ctx = canvas.getContext('2d');
+
+                if (this.chart) {
+                    this.chart.destroy();
+                }
+
+                this.chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: scoreTrend.map((_, i) => `Scan ${scoreTrend.length - i}`),
+                        datasets: [{
+                            label: 'Security Score',
+                            data: scoreTrend.reverse(),
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+            }
+
+            toggleAnalytics() {
+                this.showScreen('history');
+            }
+
+            toggleCompareMode() {
+                this.compareMode = !this.compareMode;
+                this.selectedScans = [];
+                const btn = document.getElementById('compare-mode-btn');
+                const executeBtn = document.getElementById('compare-execute-btn');
+
+                if (this.compareMode) {
+                    btn.classList.add('bg-red-500');
+                    btn.classList.remove('bg-blue-500');
+                    btn.innerHTML = '<i class="fas fa-times mr-2"></i>Cancelar';
+                    this.notify("Selecione 2 scans para comparar");
+                } else {
+                    btn.classList.remove('bg-red-500');
+                    btn.classList.add('bg-blue-500');
+                    btn.innerHTML = '<i class="fas fa-code-compare mr-2"></i>Modo Comparação';
+                    executeBtn.classList.add('hidden');
+                }
+
+                this.loadVaultList();
+            }
+
+            selectScanForComparison(id) {
+                if (!this.compareMode) return;
+
+                const index = this.selectedScans.indexOf(id);
+                if (index > -1) {
+                    this.selectedScans.splice(index, 1);
+                } else {
+                    if (this.selectedScans.length >= 2) {
+                        this.notify("Máximo de 2 scans para comparação");
+                        return;
+                    }
+                    this.selectedScans.push(id);
+                }
+
+                const executeBtn = document.getElementById('compare-execute-btn');
+                if (this.selectedScans.length === 2) {
+                    executeBtn.classList.remove('hidden');
+                } else {
+                    executeBtn.classList.add('hidden');
+                }
+
+                this.loadVaultList();
+            }
+
+            async compareSelected() {
+                if (this.selectedScans.length !== 2) {
+                    this.notify("Selecione exatamente 2 scans");
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.apiBase}/compare/${this.selectedScans[0]}/${this.selectedScans[1]}`);
+                    if (!response.ok) throw new Error("Erro ao comparar scans");
+
+                    const comparison = await response.json();
+                    this.renderComparison(comparison);
+                    document.getElementById('comparison-modal').classList.remove('hidden');
+                } catch (err) {
+                    this.notify("Erro: " + err.message);
+                }
+            }
+
+            renderComparison(data) {
+                const content = document.getElementById('comparison-content');
+                const scoreDiff = data.diff.score_change;
+                const endpointsDiff = data.diff.endpoints_change;
+
+                content.innerHTML = `
+                    <div class="space-y-6">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-4 bg-blue-50 rounded-xl">
+                                <div class="text-xs font-bold text-blue-400 uppercase mb-2">Scan Anterior</div>
+                                <div class="text-sm font-black text-blue-700 truncate">${data.scan1.target}</div>
+                                <div class="text-xs text-blue-600 mt-1">${new Date(data.scan1.created_at).toLocaleString()}</div>
+                                <div class="mt-3">
+                                    <div class="text-2xl font-black text-blue-700">${data.scan1.score}</div>
+                                    <div class="text-[9px] font-bold text-blue-400 uppercase">Score</div>
+                                </div>
+                            </div>
+                            <div class="p-4 bg-emerald-50 rounded-xl">
+                                <div class="text-xs font-bold text-emerald-400 uppercase mb-2">Scan Atual</div>
+                                <div class="text-sm font-black text-emerald-700 truncate">${data.scan2.target}</div>
+                                <div class="text-xs text-emerald-600 mt-1">${new Date(data.scan2.created_at).toLocaleString()}</div>
+                                <div class="mt-3">
+                                    <div class="text-2xl font-black text-emerald-700">${data.scan2.score}</div>
+                                    <div class="text-[9px] font-bold text-emerald-400 uppercase">Score</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="glass-card p-6 border-2 ${scoreDiff >= 0 ? 'border-emerald-500' : 'border-red-500'}">
+                            <h4 class="text-sm font-black text-slate-800 mb-4">Análise Comparativa</h4>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <span class="text-xs font-bold text-slate-600">Mudança no Score</span>
+                                    <span class="text-lg font-black ${scoreDiff >= 0 ? 'text-emerald-600' : 'text-red-600'}">
+                                        ${scoreDiff >= 0 ? '+' : ''}${scoreDiff}
+                                        <i class="fas fa-${scoreDiff >= 0 ? 'arrow-up' : 'arrow-down'} text-sm ml-1"></i>
+                                    </span>
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <span class="text-xs font-bold text-slate-600">Mudança em Endpoints</span>
+                                    <span class="text-lg font-black ${endpointsDiff >= 0 ? 'text-blue-600' : 'text-orange-600'}">
+                                        ${endpointsDiff >= 0 ? '+' : ''}${endpointsDiff}
+                                    </span>
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <span class="text-xs font-bold text-slate-600">Tempo Entre Scans</span>
+                                    <span class="text-lg font-black text-slate-800">
+                                        ${Math.round(data.diff.time_between)} dias
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 p-4 ${scoreDiff >= 0 ? 'bg-emerald-50' : 'bg-red-50'} rounded-xl">
+                                <div class="text-xs font-bold ${scoreDiff >= 0 ? 'text-emerald-700' : 'text-red-700'} mb-2">
+                                    <i class="fas fa-${scoreDiff >= 0 ? 'check-circle' : 'exclamation-triangle'} mr-1"></i>
+                                    ${scoreDiff >= 0 ? 'Melhoria Detectada' : 'Degradação Detectada'}
+                                </div>
+                                <p class="text-[11px] ${scoreDiff >= 0 ? 'text-emerald-600' : 'text-red-600'}">
+                                    ${scoreDiff >= 0
+                        ? 'A segurança do sistema melhorou. Continue monitorando.'
+                        : 'A segurança do sistema piorou. Ação imediata recomendada.'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            closeComparison() {
+                document.getElementById('comparison-modal').classList.add('hidden');
+            }
+        }
+
+        window.app = new AegisApp();
+        console.log('✅ AegisApp initialized successfully', window.app);
+    </script>
+</body>
+
+</html>
