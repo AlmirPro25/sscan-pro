@@ -2,6 +2,14 @@ const express = require('express');
 const { chromium } = require('playwright');
 const cors = require('cors');
 
+// Import advanced modules
+const { 
+    InfrastructureScanner, 
+    SubdomainScanner, 
+    ReputationScanner,
+    AuthenticatedScanner 
+} = require('./modules');
+
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -1321,7 +1329,244 @@ Sugestão: Tente com a URL base do site (sem parâmetros UTM/tracking)`;
     }
 });
 
+// ============================================================================
+// ADVANCED SCANNING ENDPOINTS
+// ============================================================================
+
+/**
+ * Infrastructure Scan - Port scanning, cloud detection, SSL analysis
+ */
+app.post('/scan/infrastructure', async (req, res) => {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL is required' });
+
+    console.log(`🔍 [API] Infrastructure scan requested for: ${url}`);
+
+    try {
+        const scanner = new InfrastructureScanner();
+        const results = await scanner.scan(url);
+        res.json(results);
+    } catch (err) {
+        console.error('❌ Infrastructure scan error:', err.message);
+        res.status(500).json({ error: 'Infrastructure scan failed', details: err.message });
+    }
+});
+
+/**
+ * Subdomain Scan - Enumeration and takeover detection
+ */
+app.post('/scan/subdomains', async (req, res) => {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL is required' });
+
+    console.log(`🔍 [API] Subdomain scan requested for: ${url}`);
+
+    try {
+        const scanner = new SubdomainScanner();
+        const hostname = new URL(url).hostname;
+        const results = await scanner.scan(hostname);
+        res.json(results);
+    } catch (err) {
+        console.error('❌ Subdomain scan error:', err.message);
+        res.status(500).json({ error: 'Subdomain scan failed', details: err.message });
+    }
+});
+
+/**
+ * Reputation Scan - Blacklist check, IP info, email security
+ */
+app.post('/scan/reputation', async (req, res) => {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL is required' });
+
+    console.log(`🔍 [API] Reputation scan requested for: ${url}`);
+
+    try {
+        const scanner = new ReputationScanner();
+        const results = await scanner.scan(url);
+        res.json(results);
+    } catch (err) {
+        console.error('❌ Reputation scan error:', err.message);
+        res.status(500).json({ error: 'Reputation scan failed', details: err.message });
+    }
+});
+
+/**
+ * Authenticated Scan - Login and test authenticated areas
+ */
+app.post('/scan/authenticated', async (req, res) => {
+    const { url, credentials } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL is required' });
+    if (!credentials || !credentials.username || !credentials.password) {
+        return res.status(400).json({ 
+            error: 'Credentials required',
+            hint: 'Provide { credentials: { username, password, loginUrl?, usernameField?, passwordField? } }'
+        });
+    }
+
+    console.log(`🔍 [API] Authenticated scan requested for: ${url}`);
+
+    let browser;
+    try {
+        browser = await chromium.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+
+        const scanner = new AuthenticatedScanner(browser);
+        const results = await scanner.scan(url, credentials);
+        res.json(results);
+    } catch (err) {
+        console.error('❌ Authenticated scan error:', err.message);
+        res.status(500).json({ error: 'Authenticated scan failed', details: err.message });
+    } finally {
+        if (browser) await browser.close();
+    }
+});
+
+/**
+ * Full Advanced Scan - All modules combined
+ */
+app.post('/scan/advanced', async (req, res) => {
+    const { url, credentials, modules } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL is required' });
+
+    // Default: run all modules except authenticated (requires credentials)
+    const enabledModules = modules || {
+        infrastructure: true,
+        subdomains: true,
+        reputation: true,
+        authenticated: !!credentials
+    };
+
+    console.log(`🔍 [API] Advanced scan requested for: ${url}`);
+    console.log(`   Modules: ${Object.entries(enabledModules).filter(([k,v]) => v).map(([k]) => k).join(', ')}`);
+
+    const results = {
+        url,
+        scanTime: new Date().toISOString(),
+        modules: {}
+    };
+
+    let browser;
+
+    try {
+        // Infrastructure scan
+        if (enabledModules.infrastructure) {
+            console.log('🔍 Running infrastructure scan...');
+            const infraScanner = new InfrastructureScanner();
+            results.modules.infrastructure = await infraScanner.scan(url);
+        }
+
+        // Subdomain scan
+        if (enabledModules.subdomains) {
+            console.log('🔍 Running subdomain scan...');
+            const subScanner = new SubdomainScanner();
+            const hostname = new URL(url).hostname;
+            results.modules.subdomains = await subScanner.scan(hostname);
+        }
+
+        // Reputation scan
+        if (enabledModules.reputation) {
+            console.log('🔍 Running reputation scan...');
+            const repScanner = new ReputationScanner();
+            results.modules.reputation = await repScanner.scan(url);
+        }
+
+        // Authenticated scan (if credentials provided)
+        if (enabledModules.authenticated && credentials) {
+            console.log('🔍 Running authenticated scan...');
+            browser = await chromium.launch({
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox']
+            });
+            const authScanner = new AuthenticatedScanner(browser);
+            results.modules.authenticated = await authScanner.scan(url, credentials);
+        }
+
+        // Calculate overall summary
+        results.summary = calculateAdvancedSummary(results.modules);
+
+        console.log(`✅ Advanced scan complete`);
+        res.json(results);
+
+    } catch (err) {
+        console.error('❌ Advanced scan error:', err.message);
+        res.status(500).json({ error: 'Advanced scan failed', details: err.message });
+    } finally {
+        if (browser) await browser.close();
+    }
+});
+
+/**
+ * Calculate overall summary from all modules
+ */
+function calculateAdvancedSummary(modules) {
+    const summary = {
+        overallRisk: 'LOW',
+        criticalFindings: 0,
+        highFindings: 0,
+        mediumFindings: 0,
+        lowFindings: 0,
+        highlights: []
+    };
+
+    // Infrastructure findings
+    if (modules.infrastructure?.summary) {
+        summary.criticalFindings += modules.infrastructure.summary.criticalFindings || 0;
+        summary.highFindings += modules.infrastructure.summary.highFindings || 0;
+        summary.mediumFindings += modules.infrastructure.summary.mediumFindings || 0;
+        
+        if (modules.infrastructure.summary.criticalFindings > 0) {
+            summary.highlights.push(`${modules.infrastructure.summary.criticalFindings} porta(s) crítica(s) exposta(s)`);
+        }
+    }
+
+    // Subdomain findings
+    if (modules.subdomains?.summary) {
+        if (modules.subdomains.takeoverVulnerabilities > 0) {
+            summary.criticalFindings += modules.subdomains.takeoverVulnerabilities;
+            summary.highlights.push(`${modules.subdomains.takeoverVulnerabilities} subdomínio(s) vulnerável(is) a takeover`);
+        }
+    }
+
+    // Reputation findings
+    if (modules.reputation?.summary) {
+        if (modules.reputation.blacklists?.listed?.length > 0) {
+            summary.highFindings += modules.reputation.blacklists.listed.length;
+            summary.highlights.push(`IP listado em ${modules.reputation.blacklists.listed.length} blacklist(s)`);
+        }
+    }
+
+    // Authenticated findings
+    if (modules.authenticated?.summary) {
+        if (modules.authenticated.idorVulnerabilities > 0) {
+            summary.criticalFindings += modules.authenticated.idorVulnerabilities;
+            summary.highlights.push(`${modules.authenticated.idorVulnerabilities} vulnerabilidade(s) IDOR`);
+        }
+        summary.highFindings += modules.authenticated.vulnerabilitiesFound || 0;
+    }
+
+    // Determine overall risk
+    if (summary.criticalFindings > 0) {
+        summary.overallRisk = 'CRITICAL';
+    } else if (summary.highFindings > 0) {
+        summary.overallRisk = 'HIGH';
+    } else if (summary.mediumFindings > 0) {
+        summary.overallRisk = 'MEDIUM';
+    }
+
+    return summary;
+}
+
 const PORT = 3001;
 app.listen(PORT, () => {
     console.log(`🚀 Playwright Worker listening on port ${PORT}`);
+    console.log(`📡 Available endpoints:`);
+    console.log(`   POST /scan              - Full web scan (DAST)`);
+    console.log(`   POST /scan/infrastructure - Port scan, cloud detection`);
+    console.log(`   POST /scan/subdomains   - Subdomain enumeration`);
+    console.log(`   POST /scan/reputation   - Blacklist & email security`);
+    console.log(`   POST /scan/authenticated - Authenticated testing`);
+    console.log(`   POST /scan/advanced     - All modules combined`);
 });
