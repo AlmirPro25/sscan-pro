@@ -1559,6 +1559,537 @@ function calculateAdvancedSummary(modules) {
     return summary;
 }
 
+// ============================================================================
+// BROWSER CONTROL ENDPOINTS (for Orchestrator)
+// ============================================================================
+
+// Global browser instance for orchestrator
+let orchestratorBrowser = null;
+let orchestratorPage = null;
+
+/**
+ * Initialize or get browser instance
+ */
+async function getOrchestratorBrowser() {
+    if (!orchestratorBrowser) {
+        orchestratorBrowser = await chromium.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        const context = await orchestratorBrowser.newContext({
+            viewport: { width: 1920, height: 1080 }
+        });
+        orchestratorPage = await context.newPage();
+    }
+    return { browser: orchestratorBrowser, page: orchestratorPage };
+}
+
+/**
+ * Health check endpoint
+ */
+app.get('/health', (req, res) => {
+    res.json({ status: 'online', timestamp: new Date().toISOString() });
+});
+
+/**
+ * Navigate to URL
+ */
+app.post('/browser/navigate', async (req, res) => {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL is required' });
+
+    try {
+        const { page } = await getOrchestratorBrowser();
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        
+        const screenshot = await page.screenshot({ type: 'jpeg', quality: 80 });
+        
+        res.json({
+            success: true,
+            url: page.url(),
+            title: await page.title(),
+            screenshot: screenshot.toString('base64')
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Take screenshot (full page or viewport)
+ */
+app.post('/browser/screenshot', async (req, res) => {
+    const { full_page = true } = req.body;
+
+    try {
+        const { page } = await getOrchestratorBrowser();
+        
+        const screenshot = await page.screenshot({ 
+            type: 'jpeg', 
+            quality: 80,
+            fullPage: full_page
+        });
+        
+        res.json({
+            success: true,
+            url: page.url(),
+            full_page: full_page,
+            screenshot: screenshot.toString('base64')
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Take contextual screenshot (viewport + full page + DOM + metadata)
+ * This is the "forensic evidence" capture for AI analysis
+ */
+app.post('/browser/contextual-screenshot', async (req, res) => {
+    const { include_dom = true, include_console = false } = req.body;
+
+    try {
+        const { page } = await getOrchestratorBrowser();
+        
+        // Capture console logs if requested
+        const consoleLogs = [];
+        if (include_console) {
+            page.on('console', msg => {
+                consoleLogs.push({
+                    type: msg.type(),
+                    text: msg.text(),
+                    timestamp: new Date().toISOString()
+                });
+            });
+        }
+
+        // Capture viewport screenshot
+        const viewportScreenshot = await page.screenshot({ 
+            type: 'jpeg', 
+            quality: 85,
+            fullPage: false
+        });
+
+        // Capture full page screenshot
+        const fullPageScreenshot = await page.screenshot({ 
+            type: 'jpeg', 
+            quality: 80,
+            fullPage: true
+        });
+
+        // Capture DOM if requested
+        let domSnapshot = null;
+        let domStats = null;
+        if (include_dom) {
+            const content = await page.content();
+            // Limit DOM size to prevent huge payloads
+            domSnapshot = content.length > 100000 ? content.substring(0, 100000) + '...[truncated]' : content;
+            
+            // Get DOM statistics
+            domStats = await page.evaluate(() => {
+                return {
+                    forms: document.querySelectorAll('form').length,
+                    inputs: document.querySelectorAll('input').length,
+                    links: document.querySelectorAll('a').length,
+                    scripts: document.querySelectorAll('script').length,
+                    iframes: document.querySelectorAll('iframe').length,
+                    images: document.querySelectorAll('img').length,
+                    buttons: document.querySelectorAll('button').length,
+                    textareas: document.querySelectorAll('textarea').length,
+                    hasLoginForm: !!document.querySelector('input[type="password"]'),
+                    hasFileUpload: !!document.querySelector('input[type="file"]'),
+                    title: document.title,
+                    bodyClasses: document.body?.className || '',
+                };
+            });
+        }
+
+        // Get page metadata
+        const metadata = await page.evaluate(() => {
+            const getMeta = (name) => document.querySelector(`meta[name="${name}"], meta[property="${name}"]`)?.content || null;
+            return {
+                title: document.title,
+                description: getMeta('description'),
+                viewport: getMeta('viewport'),
+                robots: getMeta('robots'),
+                generator: getMeta('generator'),
+                ogTitle: getMeta('og:title'),
+                ogImage: getMeta('og:image'),
+                canonical: document.querySelector('link[rel="canonical"]')?.href || null,
+            };
+        });
+
+        // Get security-relevant info
+        const securityInfo = await page.evaluate(() => {
+            return {
+                protocol: window.location.protocol,
+                hasServiceWorker: 'serviceWorker' in navigator,
+                cookieEnabled: navigator.cookieEnabled,
+                doNotTrack: navigator.doNotTrack,
+                localStorage: Object.keys(localStorage).length,
+                sessionStorage: Object.keys(sessionStorage).length,
+                cookies: document.cookie ? document.cookie.split(';').length : 0,
+            };
+        });
+
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            url: page.url(),
+            viewport: {
+                screenshot: viewportScreenshot.toString('base64'),
+                width: page.viewportSize()?.width || 1920,
+                height: page.viewportSize()?.height || 1080
+            },
+            full_page: {
+                screenshot: fullPageScreenshot.toString('base64')
+            },
+            dom: include_dom ? {
+                html: domSnapshot,
+                stats: domStats
+            } : null,
+            metadata: metadata,
+            security: securityInfo,
+            console_logs: include_console ? consoleLogs : null
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Click element
+ */
+app.post('/browser/click', async (req, res) => {
+    const { selector, text } = req.body;
+    if (!selector && !text) {
+        return res.status(400).json({ error: 'selector or text is required' });
+    }
+
+    try {
+        const { page } = await getOrchestratorBrowser();
+        
+        if (text) {
+            await page.getByText(text).first().click({ timeout: 5000 });
+        } else {
+            await page.click(selector, { timeout: 5000 });
+        }
+        
+        await page.waitForTimeout(1000);
+        const screenshot = await page.screenshot({ type: 'jpeg', quality: 80 });
+        
+        res.json({
+            success: true,
+            url: page.url(),
+            screenshot: screenshot.toString('base64')
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Fill input
+ */
+app.post('/browser/fill', async (req, res) => {
+    const { selector, value } = req.body;
+    if (!selector || value === undefined) {
+        return res.status(400).json({ error: 'selector and value are required' });
+    }
+
+    try {
+        const { page } = await getOrchestratorBrowser();
+        await page.fill(selector, value, { timeout: 5000 });
+        
+        res.json({
+            success: true,
+            selector: selector,
+            filled: true
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Get page content
+ */
+app.get('/browser/content', async (req, res) => {
+    try {
+        const { page } = await getOrchestratorBrowser();
+        const content = await page.content();
+        
+        res.json({
+            success: true,
+            url: page.url(),
+            title: await page.title(),
+            content: content.substring(0, 50000) // Limit to 50KB
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Execute JavaScript
+ */
+app.post('/browser/execute', async (req, res) => {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ error: 'code is required' });
+
+    try {
+        const { page } = await getOrchestratorBrowser();
+        const result = await page.evaluate(code);
+        
+        res.json({
+            success: true,
+            result: result
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Close browser (cleanup)
+ */
+app.post('/browser/close', async (req, res) => {
+    try {
+        if (orchestratorBrowser) {
+            await orchestratorBrowser.close();
+            orchestratorBrowser = null;
+            orchestratorPage = null;
+        }
+        res.json({ success: true, message: 'Browser closed' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Take forensic screenshot - Complete evidence capture for pentest
+ * Includes: viewport, full-page, DOM, console, network, cookies, storage
+ */
+app.post('/browser/forensic-screenshot', async (req, res) => {
+    const { 
+        include_network = true, 
+        include_cookies = true, 
+        include_storage = true 
+    } = req.body;
+
+    try {
+        const { page, context } = await getOrchestratorBrowser();
+        
+        // Capture console logs
+        const consoleLogs = [];
+        const consoleHandler = msg => {
+            consoleLogs.push({
+                type: msg.type(),
+                text: msg.text(),
+                timestamp: new Date().toISOString()
+            });
+        };
+        page.on('console', consoleHandler);
+
+        // Capture network requests
+        const networkRequests = [];
+        if (include_network) {
+            const requests = await page.evaluate(() => {
+                return performance.getEntriesByType('resource').map(r => ({
+                    name: r.name,
+                    type: r.initiatorType,
+                    duration: Math.round(r.duration),
+                    size: r.transferSize || 0
+                }));
+            });
+            networkRequests.push(...requests);
+        }
+
+        // Capture viewport screenshot
+        const viewportScreenshot = await page.screenshot({ 
+            type: 'png',
+            fullPage: false
+        });
+
+        // Capture full page screenshot
+        const fullPageScreenshot = await page.screenshot({ 
+            type: 'jpeg', 
+            quality: 85,
+            fullPage: true
+        });
+
+        // Capture DOM
+        const domContent = await page.content();
+        const domSnapshot = domContent.length > 200000 
+            ? domContent.substring(0, 200000) + '...[truncated]' 
+            : domContent;
+
+        // DOM statistics
+        const domStats = await page.evaluate(() => ({
+            forms: document.querySelectorAll('form').length,
+            inputs: document.querySelectorAll('input').length,
+            passwordFields: document.querySelectorAll('input[type="password"]').length,
+            hiddenFields: document.querySelectorAll('input[type="hidden"]').length,
+            links: document.querySelectorAll('a').length,
+            externalLinks: [...document.querySelectorAll('a[href^="http"]')].filter(a => !a.href.includes(location.hostname)).length,
+            scripts: document.querySelectorAll('script').length,
+            inlineScripts: document.querySelectorAll('script:not([src])').length,
+            iframes: document.querySelectorAll('iframe').length,
+            images: document.querySelectorAll('img').length,
+            buttons: document.querySelectorAll('button').length,
+            textareas: document.querySelectorAll('textarea').length,
+            fileUploads: document.querySelectorAll('input[type="file"]').length,
+            title: document.title,
+            doctype: document.doctype ? document.doctype.name : 'none',
+        }));
+
+        // Capture cookies
+        let cookies = [];
+        if (include_cookies) {
+            cookies = await context.cookies();
+            // Sanitize sensitive values
+            cookies = cookies.map(c => ({
+                name: c.name,
+                domain: c.domain,
+                path: c.path,
+                secure: c.secure,
+                httpOnly: c.httpOnly,
+                sameSite: c.sameSite,
+                expires: c.expires,
+                hasValue: !!c.value,
+                valueLength: c.value?.length || 0
+            }));
+        }
+
+        // Capture storage
+        let storage = null;
+        if (include_storage) {
+            storage = await page.evaluate(() => {
+                const getStorageData = (store) => {
+                    const data = {};
+                    for (let i = 0; i < store.length; i++) {
+                        const key = store.key(i);
+                        const value = store.getItem(key);
+                        data[key] = {
+                            length: value?.length || 0,
+                            preview: value?.substring(0, 100) || ''
+                        };
+                    }
+                    return data;
+                };
+                return {
+                    localStorage: getStorageData(localStorage),
+                    sessionStorage: getStorageData(sessionStorage),
+                    localStorageCount: localStorage.length,
+                    sessionStorageCount: sessionStorage.length
+                };
+            });
+        }
+
+        // Security analysis
+        const securityAnalysis = await page.evaluate(() => {
+            const scripts = [...document.querySelectorAll('script[src]')];
+            const externalScripts = scripts.filter(s => {
+                try {
+                    return new URL(s.src).hostname !== location.hostname;
+                } catch { return false; }
+            });
+
+            return {
+                protocol: location.protocol,
+                isSecure: location.protocol === 'https:',
+                hasServiceWorker: 'serviceWorker' in navigator,
+                cookieEnabled: navigator.cookieEnabled,
+                doNotTrack: navigator.doNotTrack,
+                externalScriptsCount: externalScripts.length,
+                externalScriptDomains: [...new Set(externalScripts.map(s => {
+                    try { return new URL(s.src).hostname; } catch { return 'unknown'; }
+                }))],
+                hasInlineEventHandlers: !!document.querySelector('[onclick], [onload], [onerror]'),
+                hasEval: document.body?.innerHTML?.includes('eval(') || false,
+                hasDocumentWrite: document.body?.innerHTML?.includes('document.write') || false,
+            };
+        });
+
+        // Page metadata
+        const metadata = await page.evaluate(() => {
+            const getMeta = (name) => document.querySelector(`meta[name="${name}"], meta[property="${name}"]`)?.content || null;
+            return {
+                title: document.title,
+                description: getMeta('description'),
+                viewport: getMeta('viewport'),
+                robots: getMeta('robots'),
+                generator: getMeta('generator'),
+                author: getMeta('author'),
+                ogTitle: getMeta('og:title'),
+                ogImage: getMeta('og:image'),
+                canonical: document.querySelector('link[rel="canonical"]')?.href || null,
+                charset: document.characterSet,
+                language: document.documentElement.lang || null,
+            };
+        });
+
+        // Response headers (from last navigation)
+        const responseHeaders = {};
+        try {
+            const response = await page.goto(page.url(), { waitUntil: 'domcontentloaded', timeout: 5000 });
+            if (response) {
+                const headers = response.headers();
+                responseHeaders.server = headers['server'] || null;
+                responseHeaders.xPoweredBy = headers['x-powered-by'] || null;
+                responseHeaders.contentType = headers['content-type'] || null;
+                responseHeaders.csp = headers['content-security-policy'] || null;
+                responseHeaders.hsts = headers['strict-transport-security'] || null;
+                responseHeaders.xFrameOptions = headers['x-frame-options'] || null;
+                responseHeaders.xContentTypeOptions = headers['x-content-type-options'] || null;
+                responseHeaders.xXssProtection = headers['x-xss-protection'] || null;
+            }
+        } catch (e) {
+            // Ignore navigation errors
+        }
+
+        page.off('console', consoleHandler);
+
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            url: page.url(),
+            evidence: {
+                viewport: {
+                    screenshot: viewportScreenshot.toString('base64'),
+                    format: 'png'
+                },
+                fullPage: {
+                    screenshot: fullPageScreenshot.toString('base64'),
+                    format: 'jpeg'
+                },
+                dom: {
+                    html: domSnapshot,
+                    stats: domStats,
+                    truncated: domContent.length > 200000
+                },
+                consoleLogs: consoleLogs,
+                network: include_network ? {
+                    requests: networkRequests,
+                    totalRequests: networkRequests.length
+                } : null,
+                cookies: include_cookies ? {
+                    list: cookies,
+                    total: cookies.length,
+                    secure: cookies.filter(c => c.secure).length,
+                    httpOnly: cookies.filter(c => c.httpOnly).length
+                } : null,
+                storage: storage,
+                security: securityAnalysis,
+                metadata: metadata,
+                headers: responseHeaders
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 const PORT = 3001;
 app.listen(PORT, () => {
     console.log(`🚀 Playwright Worker listening on port ${PORT}`);
@@ -1569,4 +2100,5 @@ app.listen(PORT, () => {
     console.log(`   POST /scan/reputation   - Blacklist & email security`);
     console.log(`   POST /scan/authenticated - Authenticated testing`);
     console.log(`   POST /scan/advanced     - All modules combined`);
+    console.log(`   POST /browser/*         - Browser control (Orchestrator)`);
 });

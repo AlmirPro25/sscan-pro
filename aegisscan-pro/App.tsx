@@ -14,6 +14,7 @@ import { ProjectsView } from './components/ProjectsView';
 import { AdvancedScanView } from './components/AdvancedScanView';
 import { SCAView } from './components/SCAView';
 import { CorrelationView } from './components/CorrelationView';
+import { OrchestratorView } from './components/OrchestratorView';
 
 const STEPS = [
     "INITIALIZING AEGIS KERNEL v2.0...",
@@ -230,6 +231,12 @@ const App: React.FC = () => {
                         onBack={() => setScreen(ScreenState.DASHBOARD)}
                     />
                 )}
+
+                {screen === ScreenState.ORCHESTRATOR && (
+                    <OrchestratorView
+                        onBack={() => setScreen(ScreenState.DASHBOARD)}
+                    />
+                )}
             </main>
 
             {/* Navigation Rail */}
@@ -241,6 +248,7 @@ const App: React.FC = () => {
                         { id: ScreenState.ADVANCED_SCAN, icon: 'rocket', label: 'Advanced' },
                         { id: ScreenState.SCA_SCAN, icon: 'cubes', label: 'SCA' },
                         { id: ScreenState.CORRELATION, icon: 'link', label: 'Correlate' },
+                        { id: ScreenState.ORCHESTRATOR, icon: 'brain', label: 'AI Chat' },
                         { id: ScreenState.HISTORY, icon: 'database', label: 'Vault' },
                         { id: ScreenState.SETTINGS, icon: 'sliders-h', label: 'Config' },
                     ].map(item => (

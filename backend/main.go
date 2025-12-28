@@ -14,6 +14,7 @@ import (
 
 	"aegis-scan-backend/ai"
 	"aegis-scan-backend/scanner"
+	"aegis-scan-backend/security"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -258,10 +259,15 @@ func main() {
 
 	r := gin.Default()
 
-	// Security Policy (CORS)
+	// Security Middlewares (v8.5 Hardening)
+	r.Use(security.SecureHeaders())
+	r.Use(security.AuditMiddleware())
+	r.Use(security.RequestValidator())
+
+	// CORS Configuration (SECURE - no wildcard with credentials)
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
+		AllowOrigins:     security.GetAllowedOrigins(),
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
@@ -339,6 +345,43 @@ func main() {
 		// DAST+SAST Correlation endpoints
 		v1.POST("/correlate", RateLimitMiddleware(rateLimiter), handleCorrelation)
 		v1.GET("/correlate/project/:project_id", handleQuickCorrelation)
+		
+		// Central Intelligence Orchestrator endpoints
+		v1.POST("/orchestrator/chat", RateLimitMiddleware(rateLimiter), handleOrchestratorChat)
+		v1.POST("/orchestrator/session", handleOrchestratorNewSession)
+		v1.GET("/orchestrator/session/:session_id", handleOrchestratorGetSession)
+		v1.GET("/orchestrator/sessions", handleOrchestratorListSessions)
+		v1.DELETE("/orchestrator/session/:session_id", handleOrchestratorDeleteSession)
+		v1.GET("/orchestrator/tools", handleOrchestratorGetTools)
+		v1.POST("/orchestrator/execute", RateLimitMiddleware(rateLimiter), handleOrchestratorExecuteTool)
+		
+		// Orchestrator Policy & Approval endpoints
+		v1.GET("/orchestrator/approvals", handleOrchestratorGetPendingApprovals)
+		v1.POST("/orchestrator/approvals/:approval_id/approve", handleOrchestratorApprove)
+		v1.POST("/orchestrator/approvals/:approval_id/deny", handleOrchestratorDeny)
+		v1.GET("/orchestrator/audit-logs", handleOrchestratorGetAuditLogs)
+		v1.GET("/orchestrator/meta-analysis", handleOrchestratorMetaAnalysis)
+		
+		// Registry & Policy endpoints
+		v1.GET("/orchestrator/registry", handleOrchestratorGetRegistry)
+		v1.GET("/orchestrator/policy", handleOrchestratorGetPolicyStatus)
+		v1.POST("/orchestrator/policy", handleOrchestratorSetPolicy)
+		v1.GET("/orchestrator/memory/insights", handleOrchestratorGetMemoryInsights)
+		
+		// Execution Graph & Dry-Run endpoints
+		v1.POST("/orchestrator/dry-run", handleOrchestratorDryRun)
+		v1.POST("/orchestrator/execute-plan", handleOrchestratorExecutePlan)
+		
+		// Decision Intelligence Layer endpoints (v8.4)
+		v1.POST("/orchestrator/risk/calculate", handleCalculateRisk)
+		v1.POST("/orchestrator/tokens", handleCreateApprovalToken)
+		v1.POST("/orchestrator/tokens/:token_id/validate", handleValidateToken)
+		v1.POST("/orchestrator/tokens/:token_id/revoke", handleRevokeToken)
+		v1.GET("/orchestrator/tokens", handleListTokens)
+		v1.GET("/orchestrator/policy/history", handleGetPolicyHistory)
+		v1.POST("/orchestrator/policy/compare", handleComparePolicies)
+		v1.GET("/orchestrator/planner/insights", handleGetPlannerInsights)
+		v1.GET("/orchestrator/feedback/:execution_id", handleGetExecutionFeedback)
 	}
 
 	port := os.Getenv("PORT")
@@ -413,7 +456,7 @@ func handleAIReport(c *gin.Context) {
 	var input struct {
 		ScanID uint   `json:"scan_id" binding:"required"`
 		Model  string `json:"model"`   // Default to models/gemini-3-flash-preview
-		ApiKey string `json:"api_key"` // Optional key from client
+		ApiKey string `json:"api_key"` // Optional key from client (blocked in production)
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -434,18 +477,14 @@ func handleAIReport(c *gin.Context) {
 		return
 	}
 
-	// Use API key from frontend or environment variable
-	apiKey := input.ApiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("GEMINI_API_KEY")
-	}
-
-	if apiKey == "" {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "GEMINI_API_KEY is not configured. Please provide it in settings."})
+	// SECURE API KEY HANDLING (v8.5 hardening)
+	apiKey, err := security.GetAPIKey(input.ApiKey)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 		return
 	}
 	
-	log.Printf("🔑 Using API Key: %s... (length: %d)", apiKey[:10], len(apiKey))
+	log.Printf("🔑 %s", security.LogAPIKeyUsage(apiKey, "AI Report"))
 	log.Printf("🤖 Using Model: %s", modelName)
 
 	ctx := c.Request.Context()
@@ -733,8 +772,15 @@ func triggerWorkerScan(targetURL string) (*WorkerResponse, error) {
 func getAIReport(c *gin.Context) {
 	scanID := c.Param("scan_id")
 
+	// Input validation (v8.5 hardening)
+	id, err := security.ValidateScanID(scanID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	var report AIReport
-	if err := db.Where("scan_result_id = ?", scanID).First(&report).Error; err != nil {
+	if err := db.Where("scan_result_id = ?", id).First(&report).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Report not found"})
 		return
 	}
@@ -788,13 +834,10 @@ func handleAIChat(c *gin.Context) {
 	var history []ChatMessage
 	db.Where("scan_result_id = ?", input.ScanID).Order("created_at asc").Limit(10).Find(&history)
 
-	apiKey := input.ApiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("GEMINI_API_KEY")
-	}
-
-	if apiKey == "" {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "GEMINI_API_KEY is not configured"})
+	// SECURE API KEY HANDLING (v8.5 hardening)
+	apiKey, err := security.GetAPIKey(input.ApiKey)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -935,14 +978,26 @@ INSTRUÇÕES:
 func generatePDFReport(c *gin.Context) {
 	scanID := c.Param("scan_id")
 
+	// Input validation (v8.5 hardening)
+	id, err := security.ValidateScanID(scanID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	var scan ScanResult
-	if err := db.First(&scan, scanID).Error; err != nil {
+	if err := db.First(&scan, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Scan not found"})
 		return
 	}
 
 	var report AIReport
-	hasReport := db.Where("scan_result_id = ?", scanID).First(&report).Error == nil
+	hasReport := db.Where("scan_result_id = ?", id).First(&report).Error == nil
+
+	// DoS Prevention: Truncate report content before processing (v8.5 hardening)
+	if hasReport && len(report.Content) > security.ContentLimits.MaxReportContent {
+		report.Content = security.TruncateContent(report.Content, security.ContentLimits.MaxReportContent)
+	}
 
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.AddPage()
@@ -1021,9 +1076,10 @@ func generatePDFReport(c *gin.Context) {
 		pdf.SetFont("Arial", "", 9)
 		// Simple text wrapping for AI content
 		lines := splitText(report.Content, 90)
+		maxLines := security.ContentLimits.MaxPDFLines // v8.5 hardening
 		for i, line := range lines {
-			if i >= 100 {
-				pdf.Cell(0, 5, "... (truncated)")
+			if i >= maxLines {
+				pdf.Cell(0, 5, fmt.Sprintf("... (truncated at %d lines)", maxLines))
 				break
 			}
 			pdf.MultiCell(0, 5, line, "", "", false)
@@ -1037,14 +1093,14 @@ func generatePDFReport(c *gin.Context) {
 	pdf.CellFormat(0, 10, fmt.Sprintf("Generated by AegisScan Enterprise - %s", time.Now().Format("2006-01-02")), "", 0, "C", false, 0, "")
 
 	var buf bytes.Buffer
-	err := pdf.Output(&buf)
-	if err != nil {
+	pdfErr := pdf.Output(&buf)
+	if pdfErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF"})
 		return
 	}
 
 	c.Header("Content-Type", "application/pdf")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=aegis-report-%s.pdf", scanID))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=aegis-report-%d.pdf", id))
 	c.Data(http.StatusOK, "application/pdf", buf.Bytes())
 }
 

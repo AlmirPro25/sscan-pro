@@ -1,308 +1,242 @@
-# AegisScan - Enterprise Security Scanner 🛡️
+# AEGIS - Autonomous Security Orchestrator 🛡️
 
-**Versão**: 6.0  
-**Status**: ✅ Production Ready
+<div align="center">
 
-Security scanner com **auto-fix automático** e integração CI/CD.
+![Version](https://img.shields.io/badge/version-8.5-blue)
+![Status](https://img.shields.io/badge/status-production--ready-green)
+![License](https://img.shields.io/badge/license-MIT-yellow)
+
+**Plataforma de segurança autônoma com inteligência artificial**
+
+*SOC automatizado que pensa, age, aprende e se governa*
+
+</div>
+
+---
+
+## 🎯 O que é o AEGIS?
+
+AEGIS é um **Security Operations Center (SOC) autônomo** que combina:
+
+- 🔍 **Scanners de segurança** (DAST, SAST, SCA, IAC)
+- 🤖 **Inteligência Artificial** (Gemini) para análise e relatórios
+- 🧠 **Orchestrator autônomo** que planeja e executa ações
+- 📚 **Memória de longo prazo** que aprende com cada scan
+- 🔐 **Governança** com aprovações e controle de risco
+
+---
+
+## ✨ Capacidades
+
+### Scanners de Segurança
+
+| Tipo | Descrição |
+|------|-----------|
+| **DAST** | Testa aplicações web em execução (XSS, SQLi, Auth, SSL) |
+| **SAST** | Analisa código-fonte (secrets, injection, eval) |
+| **SCA** | Analisa dependências (CVEs, licenças, typosquatting) |
+| **IAC** | Analisa infraestrutura (Docker, K8s, Terraform) |
+| **Infrastructure** | Portas, SSL, cloud misconfigs |
+| **Subdomain** | Enumeração de subdomínios |
+| **Reputation** | Blacklists e reputação |
+
+### Inteligência Artificial
+
+- **Relatórios AI**: Análise profunda com Gemini
+- **Chat contextual**: Perguntas sobre vulnerabilidades
+- **Multimodal**: Analisa screenshots + dados
+- **Tom profissional**: Sanitização de linguagem
+
+### Central Intelligence Orchestrator
+
+- **Planner**: AI que raciocina e cria planos de ação
+- **Executor**: Executa ferramentas de forma controlada
+- **Policy Engine**: Valida ações contra regras de segurança
+- **Memory**: Lembra vulnerabilidades, detecta padrões
+
+### Decision Intelligence Layer
+
+- **Risk Score (0-100)**: Cálculo numérico de risco
+- **Approval Tokens**: Delegação segura com escopo
+- **Policy Versioning**: Histórico de mudanças
+- **Feedback Loop**: Aprende com execuções
+
+### AutoFix
+
+- Gera correções de código automaticamente
+- Cria Pull Requests no GitHub
 
 ---
 
 ## 🚀 Quick Start
 
-```bash
-# 1. Start backend
-cd backend && ./aegis-backend-v6.0.exe
-
-# 2. Start worker (nova janela)
-cd backend/worker && node server.js
-
-# 3. Scan
-aegis scan https://meusite.com --fail-on high
-
-# 4. Auto-fix
-aegis autofix 123
-
-# 5. Create PR
-aegis create-pr 123 "HSTS Missing" \
-  --github-token $GITHUB_TOKEN \
-  --owner usuario \
-  --repo repo
-```
-
----
-
-## ✨ Features
-
-### 🆕 V6.0 - Auto-Fix (NOVO)
-- ✅ **Geração automática de código** para corrigir vulnerabilidades
-- ✅ **Pull Requests automáticos** no GitHub
-- ✅ **Suporte a 5+ stacks** (Nginx, Express, Spring, Django, Apache)
-- ✅ **4 vulnerabilidades** (HSTS, CSP, X-Frame-Options, X-Content-Type-Options)
-- ✅ **98% redução** no tempo de correção (2-4h → 2min)
-
-### V5.0 - CI/CD Integration
-- ✅ **CLI** para uso local e CI/CD
-- ✅ **GitHub Actions, GitLab CI, Jenkins**
-- ✅ **Fail conditions** configuráveis
-- ✅ **Relatórios automáticos** em PRs
-
-### V4.2 - Tom Profissional
-- ✅ **Contexto enterprise** (reconhece WAF, equipe de segurança)
-- ✅ **Severidades realistas** (CVSS correto)
-- ✅ **Sanitização** de linguagem sensacionalista
-
-### V4.1 - Scanner Determinístico
-- ✅ **Sem alucinação** (scanner determinístico + AI correlator)
-- ✅ **Evidências concretas** (auditáveis)
-- ✅ **CVSS, CWE, OWASP** (padrão indústria)
-
-### Core Features
-- 🤖 **Relatórios AI** com Gemini (análise profunda)
-- 💬 **Chat interativo** sobre vulnerabilidades
-- 🎬 **Media player** integrado (HLS/DASH/MP4)
-- 💾 **Persistência** completa (SQLite)
-- 📊 **Dashboard** com métricas
-
----
-
-## 📦 Instalação
-
-### Backend
+### 1. Backend
 ```bash
 cd backend
-go build -o aegis-backend-v6.0.exe
-./aegis-backend-v6.0.exe
+go build -o aegis-backend.exe .
+./aegis-backend.exe
 ```
 
-### Worker
+### 2. Worker (Playwright)
 ```bash
 cd backend/worker
 npm install
 node server.js
 ```
 
-### CLI
+### 3. Frontend
 ```bash
-cd cli
-go build -o aegis.exe aegis.go
+cd aegisscan-pro
+npm install
+npm run dev
+```
 
+### 4. Configurar API Key
+```bash
 # Windows
-move aegis.exe C:\Windows\System32\
+set GEMINI_API_KEY=sua_api_key
 
 # Linux/Mac
-chmod +x aegis
-sudo mv aegis /usr/local/bin/
-```
-
-### Frontend
-```bash
-# Abrir index.html no navegador
-# ou usar Live Server no VS Code
+export GEMINI_API_KEY=sua_api_key
 ```
 
 ---
 
-## 💻 Uso
+## 📦 Arquitetura
 
-### Scan Básico
-```bash
-aegis scan https://meusite.com
 ```
-
-### Scan com Fail Condition (CI/CD)
-```bash
-# Falha se encontrar HIGH ou CRITICAL
-aegis scan https://meusite.com --fail-on high
-
-# Falha apenas em CRITICAL
-aegis scan https://meusite.com --fail-on critical
-```
-
-### Auto-Fix
-```bash
-# Gerar fixes para todas as vulnerabilidades
-aegis autofix 123
-
-# Output:
-# Fix #1: HSTS Missing
-# Stack: nginx
-# File: /etc/nginx/sites-available/default
-# Patch: add_header Strict-Transport-Security...
-```
-
-### Create PR Automático
-```bash
-aegis create-pr 123 "HSTS Missing" \
-  --github-token ghp_xxxxx \
-  --owner meu-usuario \
-  --repo meu-repo
-
-# Output:
-# ✅ Pull request created successfully!
-# PR URL: https://github.com/meu-usuario/meu-repo/pull/42
+┌─────────────────────────────────────────────────────────────┐
+│                      FRONTEND (React)                        │
+│   Dashboard │ Code Scanner │ SCA │ Correlation │ Orchestrator│
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      BACKEND (Go)                            │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │              CENTRAL INTELLIGENCE ORCHESTRATOR           ││
+│  │   Planner (AI) → Policy Engine → Executor → Memory      ││
+│  └─────────────────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │   39 TOOLS │ SCANNERS │ AI MODULES │ SECURITY HARDENING ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   WORKER (Node.js + Playwright)              │
+│   DAST Engine │ Browser Control │ Screenshots │ Auth Scan   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🔧 CI/CD Integration
+## 🔧 API Endpoints
+
+### Scans
+```bash
+POST /api/v1/scan                    # DAST scan
+POST /api/v1/scan-local              # SAST scan
+POST /api/v1/sca/full                # SCA completo
+POST /api/v1/scan/advanced           # Scan avançado
+```
+
+### AI
+```bash
+POST /api/v1/ai/report               # Gerar relatório AI
+POST /api/v1/ai/chat                 # Chat contextual
+POST /api/v1/ai/enhanced-report      # Relatório combinado
+```
+
+### Orchestrator
+```bash
+POST /api/v1/orchestrator/chat       # Chat com orchestrator
+GET  /api/v1/orchestrator/tools      # Listar ferramentas
+POST /api/v1/orchestrator/execute    # Executar ferramenta
+POST /api/v1/orchestrator/dry-run    # Simular plano
+```
+
+### Decision Layer
+```bash
+POST /api/v1/orchestrator/risk/calculate    # Calcular risco
+POST /api/v1/orchestrator/tokens            # Criar token
+GET  /api/v1/orchestrator/planner/insights  # Insights do planner
+```
+
+---
+
+## 🛡️ Security Hardening (v8.5)
+
+- ✅ CORS seguro (allowlist, não wildcard)
+- ✅ API keys protegidas (bloqueadas em produção)
+- ✅ Input validation (scan_id, URL, session_id)
+- ✅ DoS prevention (limites de conteúdo)
+- ✅ Security headers (X-Frame-Options, CSP, etc)
+- ✅ Audit logging (todas as requisições)
+- ✅ Path traversal protection
+
+---
+
+## 📊 39 Ferramentas Disponíveis
+
+| Categoria | Ferramentas |
+|-----------|-------------|
+| **Scanning** | scan_website, scan_code, scan_dependencies, scan_infrastructure, scan_subdomains, scan_reputation, scan_authenticated, scan_iac, scan_licenses, scan_typosquatting |
+| **Browser** | navigate_to, take_screenshot, take_contextual_screenshot, click_element, fill_input, get_page_content, execute_javascript, take_forensic_screenshot |
+| **Database** | query_scan_history, get_scan_details, get_project_data, list_projects |
+| **Analysis** | correlate_dast_sast, analyze_attack_surface, analyze_system_weaknesses, get_maturity_score, get_coverage_gaps |
+| **Report** | generate_ai_report, generate_pdf, compare_scans |
+| **AutoFix** | generate_autofix, create_pull_request |
+| **Memory** | remember_vulnerability, query_memory, get_security_insights, get_memory_stats, record_learning |
+
+---
+
+## 🔌 CI/CD Integration
 
 ### GitHub Actions
 ```yaml
-name: Security Check
-
-on: [push, pull_request]
-
-jobs:
-  security:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Security Scan
-        run: aegis scan ${{ secrets.TARGET_URL }} --fail-on high
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+- name: Security Scan
+  run: aegis scan ${{ secrets.TARGET_URL }} --fail-on high
 ```
 
 ### GitLab CI
 ```yaml
 security:
-  stage: security
   script:
     - aegis scan ${TARGET_URL} --fail-on high
-  only:
-    - main
-    - merge_requests
 ```
 
 ### Jenkins
 ```groovy
-pipeline {
-    stages {
-        stage('Security Scan') {
-            steps {
-                sh 'aegis scan ${TARGET_URL} --fail-on high'
-            }
-        }
-    }
-}
+sh 'aegis scan ${TARGET_URL} --fail-on high'
 ```
-
----
-
-## 📊 Métricas
-
-### Tempo de Correção
-- **Antes**: 2-4 horas por vulnerabilidade
-- **Depois**: 2 minutos por vulnerabilidade
-- **Redução**: 98%
-
-### Taxa de Correção
-- **Antes**: 30% (dev ignora ou esquece)
-- **Depois**: 90% (código pronto, fácil aplicar)
-- **Aumento**: 3x
-
-### Produtividade
-- **Antes**: 2-3 vulnerabilidades/dia
-- **Depois**: 20-30 vulnerabilidades/dia
-- **Aumento**: 10x
 
 ---
 
 ## 📚 Documentação
 
-- **[Auto-Fix Guide](docs/AUTOFIX_GUIDE.md)** - Guia completo de auto-fix
-- **[CLI & CI/CD](docs/CLI_CICD_INTEGRATION.md)** - Integração CI/CD
-- **[Roadmap](ROADMAP_NEXT_LEVEL.md)** - Próximas features
-- **[Changelogs](docs/changelogs/)** - Histórico de versões
-- **[Install Guide](INSTALL_CLI.md)** - Instalação rápida
+- [Arquitetura v8](docs/AEGIS_ARCHITECTURE_V8.md)
+- [AutoFix Guide](docs/AUTOFIX_GUIDE.md)
+- [CLI & CI/CD](docs/CLI_CICD_INTEGRATION.md)
+- [Changelogs](docs/changelogs/)
 
 ---
 
-## 🎯 Roadmap
+## 🏗️ Stack Tecnológico
 
-### V6.1 (2 semanas)
-- [ ] Mais vulnerabilidades (CORS, exposed files, SQL injection)
-- [ ] Mais stacks (Laravel, FastAPI, Go)
-- [ ] GitLab MR automation
-- [ ] Bitbucket PR automation
-
-### V6.2 (1 mês)
-- [ ] Teste automático de fixes
-- [ ] Rollback automático se testes falharem
-- [ ] AI-powered fixes para vulnerabilidades complexas
-- [ ] Multi-file patches
-
-### V7.0 (2 meses)
-- [ ] Timeline de vulnerabilidades (histórico)
-- [ ] Dashboard de métricas
-- [ ] Alertas proativos
-- [ ] VS Code extension
+| Componente | Tecnologia |
+|------------|------------|
+| Backend | Go (Gin) + GORM + SQLite |
+| Frontend | React + Vite + TailwindCSS |
+| Worker | Node.js + Playwright |
+| AI | Google Gemini |
+| CLI | Go + Cobra |
 
 ---
 
-## 🏗️ Stack
+## ⚖️ Licença
 
-- **Backend**: Go (Gin) + GORM + SQLite
-- **Frontend**: Vanilla JS + TailwindCSS
-- **Scanner**: Playwright (Node.js)
-- **AI**: Google Gemini (relatórios + chat + auto-fix)
-- **CLI**: Cobra + Color
-- **CI/CD**: GitHub Actions, GitLab CI, Jenkins
-
----
-
-## 📡 API Endpoints
-
-### Scan
-```bash
-POST /api/v1/scan
-Body: { "url": "https://example.com" }
-```
-
-### Auto-Fix
-```bash
-POST /api/v1/autofix/generate
-Body: { "scan_id": 123, "api_key": "..." }
-```
-
-### Create PR
-```bash
-POST /api/v1/autofix/create-pr
-Body: {
-  "scan_id": 123,
-  "vuln_type": "HSTS Missing",
-  "github_token": "ghp_xxxxx",
-  "owner": "usuario",
-  "repo": "repo"
-}
-```
-
-### AI Report
-```bash
-POST /api/v1/ai/report
-Body: { "scan_id": 123, "model": "gemini-3-flash-preview", "api_key": "..." }
-```
-
-### Chat
-```bash
-POST /api/v1/ai/chat
-Body: { "scan_id": 123, "message": "Explique a vulnerabilidade", "api_key": "..." }
-```
-
----
-
-## 🔒 Segurança
-
-- API keys armazenadas localmente (localStorage)
-- Sem envio de credenciais para backend
-- CORS configurado
-- Rate limiting (10 req/min)
-- Sanitização de inputs
-
----
-
-## ⚖️ Compliance & Ethics
-
-Este sistema foi projetado para fins educacionais e auditoria de segurança ética. Não utilize para atividades maliciosas.
+MIT License - Use com responsabilidade.
 
 ---
 
@@ -312,12 +246,10 @@ Pull requests são bem-vindos! Para mudanças maiores, abra uma issue primeiro.
 
 ---
 
-## 📄 Licença
+<div align="center">
 
-MIT License - Use com responsabilidade.
+**AEGIS v8.5** | Autonomous Security Orchestrator
 
----
+*Criado com 🛡️ para segurança real*
 
-**Criado por**: Kiro AI  
-**Data**: 2024-12-27  
-**Versão**: 6.0
+</div>

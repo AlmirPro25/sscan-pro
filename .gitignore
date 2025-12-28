@@ -11,6 +11,7 @@ build/
 # Database
 *.db
 *.sqlite
+aegis.db
 
 # Logs
 *.log
@@ -39,3 +40,22 @@ Thumbs.db
 # Package locks (keep package-lock.json but ignore others)
 yarn.lock
 pnpm-lock.yaml
+
+# Backup files
+*.backup
+*.bak
+index.html.backup
+
+# Old executables (keep only source)
+backend/aegis-*
+backend/*.exe
+backend/*.exe~
+
+# Test reports (internal)
+relatorio_v4*.md
+
+# Sensitive
+*.pem
+*.key
+*.crt
+secrets/

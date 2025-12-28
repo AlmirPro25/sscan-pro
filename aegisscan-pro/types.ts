@@ -161,5 +161,6 @@ export enum ScreenState {
     PROJECTS = 'projects',
     ADVANCED_SCAN = 'advanced_scan',
     SCA_SCAN = 'sca_scan',
-    CORRELATION = 'correlation'
+    CORRELATION = 'correlation',
+    ORCHESTRATOR = 'orchestrator'
 }
